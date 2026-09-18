@@ -1,7 +1,7 @@
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 [RequireComponent(typeof(CharacterController))]
+[RequireComponent(typeof(PlayerInputHandler))]
 public class PlayerMovement : MonoBehaviour
 {
     public Camera playerCamera;
@@ -9,51 +9,40 @@ public class PlayerMovement : MonoBehaviour
     public float runSpeed = 12f;
     public float jumpPower = 7f;
     public float gravity = 90f;
+    public float defaultHeight = 2f;
 
     private Vector3 moveDirection = Vector3.zero;
-    private float rotationX = 0;
     private CharacterController characterController;
+    private IPlayerInput input;
 
     private bool canMove = true;
-
-    // Input System
-    private PlayerInputActions inputActions;
-    private Vector2 moveInput;
-    private bool isRunning;
-    private bool isCrouching;
     private bool jumpQueued;
 
     void Awake()
     {
-        inputActions = new PlayerInputActions();
+        characterController = GetComponent<CharacterController>();
+        input = GetComponent<PlayerInputHandler>();
     }
 
     void OnEnable()
     {
-        inputActions.Player.Enable();
-
-        inputActions.Player.Move.performed += ctx => moveInput = ctx.ReadValue<Vector2>();
-        inputActions.Player.Move.canceled += ctx => moveInput = Vector2.zero;
-
-        inputActions.Player.Sprint.performed += ctx => isRunning = true;
-        inputActions.Player.Sprint.canceled += ctx => isRunning = false;
-
-        inputActions.Player.Crouch.performed += ctx => isCrouching = true;
-        inputActions.Player.Crouch.canceled += ctx => isCrouching = false;
-
-        inputActions.Player.Jump.performed += ctx => jumpQueued = true;
+        input.JumpPressed += OnJumpPressed;
     }
 
     void OnDisable()
     {
-        inputActions.Player.Disable();
+        input.JumpPressed -= OnJumpPressed;
     }
 
     void Start()
     {
-        characterController = GetComponent<CharacterController>();
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
+    }
+
+    void OnJumpPressed()
+    {
+        jumpQueued = true;
     }
 
     void Update()
@@ -61,8 +50,11 @@ public class PlayerMovement : MonoBehaviour
         Vector3 forward = transform.TransformDirection(Vector3.forward);
         Vector3 right = transform.TransformDirection(Vector3.right);
 
-        float curSpeedX = canMove ? (isRunning ? runSpeed : walkSpeed) * moveInput.y : 0;
-        float curSpeedY = canMove ? (isRunning ? runSpeed : walkSpeed) * moveInput.x : 0;
+        bool isRunning = input.IsRunning;
+        Vector2 move = input.MoveInput;
+
+        float curSpeedX = canMove ? (isRunning ? runSpeed : walkSpeed) * move.y : 0;
+        float curSpeedY = canMove ? (isRunning ? runSpeed : walkSpeed) * move.x : 0;
         float movementDirectionY = moveDirection.y;
         moveDirection = (forward * curSpeedX) + (right * curSpeedY);
 
@@ -80,6 +72,7 @@ public class PlayerMovement : MonoBehaviour
         {
             moveDirection.y -= gravity * Time.deltaTime;
         }
+
 
         characterController.Move(moveDirection * Time.deltaTime);
     }
