@@ -378,8 +378,8 @@ MonoBehaviour:
       m_Calls: []
   m_text: New Text
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
-  m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: 5d82976819f22ef4bad4316b261742c1, type: 2}
+  m_sharedMaterial: {fileID: -1360204505782153559, guid: 5d82976819f22ef4bad4316b261742c1, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -403,8 +403,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 55
-  m_fontSizeBase: 55
+  m_fontSize: 70
+  m_fontSizeBase: 70
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -693,7 +693,7 @@ MonoBehaviour:
     CharDialogues:
     - Bonjour !
     - "Mon fr\xE8re est un l\xE9gume..."
-  - CharName: Mako Sensein
+  - CharName: Mako Sensei
     CharDialogues:
     - Salut Nerys!
     - "Oui ton fr\xE8re est un gros l\xE9gume !"
@@ -780,8 +780,8 @@ MonoBehaviour:
       m_Calls: []
   m_text: New Text
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
-  m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: 5d82976819f22ef4bad4316b261742c1, type: 2}
+  m_sharedMaterial: {fileID: -1360204505782153559, guid: 5d82976819f22ef4bad4316b261742c1, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
