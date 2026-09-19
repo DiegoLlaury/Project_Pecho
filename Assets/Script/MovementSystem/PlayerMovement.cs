@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Rendering.Universal.Internal;
 using UnityEngine.XR;
 
 [RequireComponent(typeof(CharacterController))]
@@ -13,6 +14,7 @@ public class PlayerMovement : MonoBehaviour
     public float gravity = 90f;
     public AudioClip LandingAudioClip;
     public AudioClip[] FootstepAudioClips;
+    public Camera activeCam;
     [Range(0, 1)] public float FootstepAudioVolume = 0.5f;
 
     [Tooltip("How fast the model turns to face the input direction, in seconds")]
@@ -22,6 +24,9 @@ public class PlayerMovement : MonoBehaviour
     private Vector3 moveDirection = Vector3.zero;
     private CharacterController characterController;
     private IPlayerInput input;
+    private Vector2 move;
+    private Vector3 worldMove;
+    private float movementDirectionY;
 
     private float targetRotation;
     private float rotationVelocity;
@@ -66,14 +71,20 @@ public class PlayerMovement : MonoBehaviour
     void Update()
     {
         bool isRunning = input.IsRunning;
-        Vector2 move = input.MoveInput; // x = A/D, y = W/S, world-space axes
 
-        float speed = isRunning ? runSpeed : walkSpeed;
-        float movementDirectionY = moveDirection.y;
+        if (move != input.MoveInput)
+        {
+            move = input.MoveInput;
+            float speed = isRunning ? runSpeed : walkSpeed;
+            movementDirectionY = moveDirection.y;
 
-        // MOVEMENT: always raw world-space direction — never depends on the mesh's
-        // (possibly still-transitioning) rotation, so alternating inputs can't cause drift.
-        Vector3 worldMove = canMove ? new Vector3(move.x, 0f, move.y) * speed : Vector3.zero;
+            ///
+            Vector3 forwardDirection = (new Vector3(activeCam.transform.forward.x, 0, activeCam.transform.forward.z)).normalized;
+            Vector3 rightDirection = (new Vector3(activeCam.transform.right.x, 0, activeCam.transform.right.z)).normalized;
+
+            worldMove = canMove ? (forwardDirection * move.y + rightDirection * move.x) * speed : Vector3.zero;
+        }
+
         moveDirection = worldMove;
         moveDirection.y = movementDirectionY;
 
@@ -91,14 +102,15 @@ public class PlayerMovement : MonoBehaviour
 
         characterController.Move(moveDirection * Time.deltaTime);
 
-        // VISUAL ONLY: the mesh child rotates to face input direction, purely cosmetic
+        
         if (move != Vector2.zero)
         {
-            targetRotation = Mathf.Atan2(move.x, move.y) * Mathf.Rad2Deg;
+            targetRotation = Quaternion.LookRotation(worldMove).eulerAngles.y;
             float smoothedAngle = Mathf.SmoothDampAngle(meshTransform.eulerAngles.y, targetRotation,
                 ref rotationVelocity, rotationSmoothTime);
             meshTransform.rotation = Quaternion.Euler(0f, smoothedAngle, 0f);
         }
+
 
         UpdateAnimator(move, grounded);
 
