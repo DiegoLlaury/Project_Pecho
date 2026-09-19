@@ -63,7 +63,9 @@ public sealed class FishMovementController : MonoBehaviour
     /// <summary>
     /// Configure le poisson avec son profil de comportement et son volume de nage.
     /// </summary>
-    public void Configure(FishDefinition definition, BoxCollider configuredWaterBounds)
+    public void Configure(
+    FishDefinition definition,
+    BoxCollider configuredWaterBounds)
     {
         fishDefinition = definition;
         waterBounds = configuredWaterBounds;
@@ -80,10 +82,50 @@ public sealed class FishMovementController : MonoBehaviour
             return;
         }
 
-        swimmingHeight = fishRigidbody.position.y;
+        // Le poisson doit être un Rigidbody dynamique.
+        fishRigidbody.isKinematic = false;
+
+        // Les collisions doivent rester actives.
+        fishRigidbody.detectCollisions = true;
+
+        // On autorise X et Z.
+        // On bloque uniquement la hauteur et les rotations
+        // qui pourraient faire basculer le poisson.
+        fishRigidbody.constraints =
+            RigidbodyConstraints.FreezePositionY |
+            RigidbodyConstraints.FreezeRotationX |
+            RigidbodyConstraints.FreezeRotationZ;
+
         fishRigidbody.useGravity = false;
+
         fishRigidbody.linearDamping = 0f;
+        fishRigidbody.angularDamping = 10f;
+
+        fishRigidbody.collisionDetectionMode =
+            CollisionDetectionMode.ContinuousDynamic;
+
+        fishRigidbody.interpolation =
+            RigidbodyInterpolation.Interpolate;
+
+        // --------------------------------------------------
+        // ÉTAT DE SIMULATION
+        // --------------------------------------------------
+
+        swimmingHeight = fishRigidbody.position.y;
+
         acceleration = Vector3.zero;
+
+        fishRigidbody.linearVelocity = Vector3.zero;
+        fishRigidbody.angularVelocity = Vector3.zero;
+
+        fishRigidbody.WakeUp();
+
+        Debug.Log(
+            $"[FISH CONFIG] {name} | " +
+            $"Kinematic={fishRigidbody.isKinematic} | " +
+            $"Constraints={fishRigidbody.constraints} | " +
+            $"Velocity={fishRigidbody.linearVelocity}",
+            this);
     }
 
     /// <summary>
@@ -245,5 +287,31 @@ public sealed class FishMovementController : MonoBehaviour
         }
 
         fishRigidbody.MoveRotation(Quaternion.Euler(0f, currentYaw + yawStep, 0f));
+    }
+
+    [ContextMenu("TEST - Move Fish Left")]
+    private void TestMoveFishLeft()
+    {
+        if (fishRigidbody == null)
+        {
+            Debug.LogError("Fish Rigidbody missing.", this);
+            return;
+        }
+
+        fishRigidbody.isKinematic = false;
+
+        fishRigidbody.constraints =
+            RigidbodyConstraints.FreezePositionY |
+            RigidbodyConstraints.FreezeRotationX |
+            RigidbodyConstraints.FreezeRotationZ;
+
+        fishRigidbody.linearVelocity =
+            Vector3.left * 50f;
+
+        fishRigidbody.WakeUp();
+
+        Debug.Log(
+            $"TEST MOVEMENT | velocity={fishRigidbody.linearVelocity}",
+            this);
     }
 }

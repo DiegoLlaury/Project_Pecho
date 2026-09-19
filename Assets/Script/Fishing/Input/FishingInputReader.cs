@@ -4,17 +4,17 @@ using UnityEngine.InputSystem;
 public sealed class FishingInputReader : MonoBehaviour
 {
     /// <summary>
-    /// Effort de traction, de 0 à 1 (flèche haut).
+    /// Effort de traction, de 0 à 1.
     /// </summary>
     public float PullInput { get; private set; }
 
     /// <summary>
-    /// Relâchement du fil, de 0 à 1 (flèche bas).
+    /// Relâchement du fil, de 0 à 1.
     /// </summary>
     public float ReleaseInput { get; private set; }
 
     /// <summary>
-    /// Direction latérale, de -1 (gauche) à 1 (droite).
+    /// Direction latérale, de -1 à 1.
     /// </summary>
     public float LateralInput { get; private set; }
 
@@ -33,17 +33,14 @@ public sealed class FishingInputReader : MonoBehaviour
         bool up = keyboard.upArrowKey.isPressed;
         bool down = keyboard.downArrowKey.isPressed;
 
-        PullInput = up && !down ? 0f : 1f;
-        ReleaseInput = down && !up ? 0f : 1f;
+        PullInput = up && !down ? 1f : 0f;
+        ReleaseInput = down && !up ? 1f : 0f;
 
         LateralInput = ReadAxis(
             keyboard.leftArrowKey.isPressed,
             keyboard.rightArrowKey.isPressed);
     }
 
-    /// <summary>
-    /// Retourne un axe compris entre -1 et 1 depuis deux états de touches.
-    /// </summary>
     private static float ReadAxis(bool negativePressed, bool positivePressed)
     {
         if (negativePressed == positivePressed)
