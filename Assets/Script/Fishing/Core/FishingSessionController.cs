@@ -26,13 +26,17 @@ public sealed class FishingSessionController : MonoBehaviour
     [SerializeField] private float releaseTensionReductionPerSecond = 0.7f;
 
     [Header("Tension")]
-    [SerializeField] private float maximumLineLength = 25f;
+    [SerializeField] private float relaxedLineLength = 20f;
+    [SerializeField] private float lineStretchForMaximumTension = 8f;
     [SerializeField] private float stretchTensionMultiplier = 1f;
     [SerializeField] private float opposingForceTensionMultiplier = 0.04f;
-    [SerializeField] private float tensionRecoveryPerSecond = 0.15f;
-    [SerializeField] private float tensionSmoothingSpeed = 8f;
-    [SerializeField] private float breakThreshold = 0.98f;
+    [SerializeField] private float tensionGainPerSecond = 0.25f;
+    [SerializeField] private float tensionRecoveryPerSecond = 0.5f;
+    [SerializeField, Range(0f, 1f)] private float breakThreshold = 0.9f;
     [SerializeField] private float breakDuration = 2.5f;
+    [SerializeField] private float pullTensionGainPerSecond = 0.16f;
+    [SerializeField] private float fishRunTensionGainPerSecond = 0.12f;
+    [SerializeField] private float slackTensionRecoveryPerSecond = 0.2f;
 
     [Header("Endurance")]
     [SerializeField] private float enduranceDrainPerSecond = 12f;
@@ -154,21 +158,6 @@ public sealed class FishingSessionController : MonoBehaviour
 
     private void UpdateFishingForces()
     {
-        Vector3 escapeDirection =
-            fishEscapeAI.GetEscapeDirection(playerTransform.position);
-
-        Vector3 playerInfluence = CalculatePlayerInfluence();
-        Vector3 fishSteering =
-            escapeDirection * fishDefinition.escapeAcceleration +
-            playerInfluence;
-
-        fishMovementController.SetSteering(fishSteering);
-
-        UpdateEndurance(playerInfluence, escapeDirection);
-    }
-
-    private Vector3 CalculatePlayerInfluence()
-    {
         Vector2 fightInput = fishingInputReader.FightInput;
 
         Vector3 directionToPlayer =
@@ -178,47 +167,52 @@ public sealed class FishingSessionController : MonoBehaviour
 
         if (directionToPlayer.sqrMagnitude < MinimumDirectionMagnitude)
         {
-            return Vector3.zero;
+            fishMovementController.SetSteering(Vector3.zero);
+            return;
         }
 
         directionToPlayer.Normalize();
+
+        Vector3 escapeDirection =
+            fishEscapeAI.GetEscapeDirection(playerTransform.position);
 
         Vector3 lateralDirection = Vector3.Cross(
             Vector3.up,
             directionToPlayer).normalized;
 
         float pullInput = Mathf.Max(0f, -fightInput.y);
-        float releaseInput = Mathf.Max(0f, fightInput.y);
 
-        float pullResistanceMultiplier = Mathf.Clamp01(
-            1f - fishDefinition.resistanceToPull);
+        float pullResistanceMultiplier = 1f -
+            fishDefinition.resistanceToPull;
 
-        float lateralResistanceMultiplier = Mathf.Clamp01(
-            1f - fishDefinition.lateralResistance);
+        float lateralResistanceMultiplier = 1f -
+            fishDefinition.lateralResistance;
 
-        Vector3 pullForce =
+        Vector3 escapeInfluence =
+            escapeDirection * fishDefinition.escapeAcceleration;
+
+        Vector3 pullInfluence =
             directionToPlayer *
             pullInput *
             pullAcceleration *
             pullResistanceMultiplier;
 
-        Vector3 lateralForce =
+        Vector3 lateralInfluence =
             lateralDirection *
             fightInput.x *
             lateralAcceleration *
             lateralResistanceMultiplier;
 
-        if (releaseInput > 0f)
-        {
-            normalizedTension = Mathf.Max(
-                MinimumNormalizedValue,
-                normalizedTension -
-                releaseInput *
-                releaseTensionReductionPerSecond *
-                Time.deltaTime);
-        }
+        Vector3 combinedSteering =
+            escapeInfluence +
+            pullInfluence +
+            lateralInfluence;
 
-        return pullForce + lateralForce;
+        fishMovementController.SetSteering(combinedSteering);
+
+        UpdateEndurance(
+            pullInfluence + lateralInfluence,
+            escapeDirection);
     }
 
 
@@ -254,57 +248,68 @@ public sealed class FishingSessionController : MonoBehaviour
 
     private void UpdateTensionAndBreakTimer()
     {
+        Vector2 fightInput = fishingInputReader.FightInput;
+
+        float pullInput = Mathf.Max(0f, -fightInput.y);
+        float releaseInput = Mathf.Max(0f, fightInput.y);
+
         float lineLength = Vector3.Distance(
             rodTip.position,
             hookedFish.position);
 
-        float normalizedStretch = Mathf.Clamp01(
-            lineLength / Mathf.Max(MinimumDirectionMagnitude, maximumLineLength));
+        float lineStretch = Mathf.Max(
+            0f,
+            lineLength - relaxedLineLength);
 
-        Vector3 escapeDirection =
-            fishEscapeAI.GetEscapeDirection(playerTransform.position);
+        float normalizedLineStretch = Mathf.Clamp01(
+            lineStretch / lineStretchForMaximumTension);
 
         Vector3 directionToPlayer =
             playerTransform.position - hookedFish.position;
 
         directionToPlayer.y = 0f;
 
-        float escapeAwayFromPlayer = 0f;
+        float fishEscapeSpeed = 0f;
 
         if (directionToPlayer.sqrMagnitude > MinimumDirectionMagnitude)
         {
             directionToPlayer.Normalize();
-            escapeAwayFromPlayer = Mathf.Max(
-                0f,
-                Vector3.Dot(escapeDirection, -directionToPlayer));
+
+            Vector3 directionAwayFromPlayer = -directionToPlayer;
+
+            fishEscapeSpeed = Mathf.Clamp01(
+                Vector3.Dot(
+                    fishMovementController.CurrentVelocity,
+                    directionAwayFromPlayer) /
+                Mathf.Max(MinimumDirectionMagnitude, fishDefinition.maxSpeed));
         }
 
-        float desiredTension =
-            normalizedStretch * stretchTensionMultiplier +
-            escapeAwayFromPlayer *
-            fishDefinition.escapeAcceleration *
-            opposingForceTensionMultiplier *
-            fishDefinition.tensionGainMultiplier;
+        float playerPullTensionGain =
+            pullInput * pullTensionGainPerSecond;
 
-        desiredTension = Mathf.Clamp01(desiredTension);
+        float escapingFishTensionGain =
+            normalizedLineStretch *
+            fishEscapeSpeed *
+            fishRunTensionGainPerSecond;
 
-        normalizedTension = Mathf.MoveTowards(
-            normalizedTension,
-            desiredTension,
-            tensionSmoothingSpeed * Time.deltaTime);
+        float tensionRecovery =
+            releaseInput *
+            releaseTensionReductionPerSecond;
 
-        if (!fishingInputReader.HasFightInput)
+        if (pullInput <= 0f)
         {
-            normalizedTension = Mathf.MoveTowards(
-                normalizedTension,
-                MinimumNormalizedValue,
-                tensionRecoveryPerSecond * Time.deltaTime);
+            tensionRecovery +=
+                (1f - normalizedLineStretch) *
+                slackTensionRecoveryPerSecond;
         }
 
-        normalizedTension = Mathf.Clamp(
-            normalizedTension,
-            MinimumNormalizedValue,
-            MaximumTension);
+        normalizedTension +=
+            (playerPullTensionGain +
+            escapingFishTensionGain -
+            tensionRecovery) *
+            Time.deltaTime;
+
+        normalizedTension = Mathf.Clamp01(normalizedTension);
 
         if (normalizedTension >= breakThreshold)
         {
@@ -320,6 +325,7 @@ public sealed class FishingSessionController : MonoBehaviour
 
         breakTimer = 0f;
     }
+
 
     private void TryCatchFish()
     {
@@ -375,13 +381,19 @@ public sealed class FishingSessionController : MonoBehaviour
         releaseTensionReductionPerSecond =
             Mathf.Max(0f, releaseTensionReductionPerSecond);
 
-        maximumLineLength = Mathf.Max(MinimumDirectionMagnitude, maximumLineLength);
+        
         stretchTensionMultiplier = Mathf.Max(0f, stretchTensionMultiplier);
         opposingForceTensionMultiplier =
             Mathf.Max(0f, opposingForceTensionMultiplier);
 
         tensionRecoveryPerSecond = Mathf.Max(0f, tensionRecoveryPerSecond);
-        tensionSmoothingSpeed = Mathf.Max(0f, tensionSmoothingSpeed);
+
+        relaxedLineLength = Mathf.Max(0f, relaxedLineLength);
+        lineStretchForMaximumTension = Mathf.Max(
+            MinimumDirectionMagnitude,
+            lineStretchForMaximumTension);
+
+        tensionGainPerSecond = Mathf.Max(0f, tensionGainPerSecond);
 
         breakThreshold = Mathf.Clamp01(breakThreshold);
         breakDuration = Mathf.Max(0f, breakDuration);

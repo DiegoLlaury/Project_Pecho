@@ -12,6 +12,7 @@ public sealed class FishMovementController : MonoBehaviour
     [Header("Swimming")]
     [SerializeField] private float swimmingHeight;
     [SerializeField] private bool rotateTowardsVelocity = true;
+    [SerializeField] private float steeringForMaximumSpeed = 4f;
 
     private FishDefinition fishDefinition;
     private BoxCollider waterBounds;
@@ -94,15 +95,16 @@ public sealed class FishMovementController : MonoBehaviour
         fishRigidbody.angularVelocity = Vector3.zero;
     }
 
+
     private void FixedUpdate()
     {
         if (!isConfigured)
         {
+
             return;
         }
 
         ApplySteering();
-        LimitHorizontalSpeed();
         ConstrainToWaterBounds();
         RotateTowardsMovement();
     }
@@ -132,25 +134,37 @@ public sealed class FishMovementController : MonoBehaviour
         Vector3 horizontalSteering =
             Vector3.ProjectOnPlane(combinedSteering, Vector3.up);
 
-        fishRigidbody.AddForce(horizontalSteering, ForceMode.Acceleration);
-    }
+        float steeringMagnitude = horizontalSteering.magnitude;
 
-    private void LimitHorizontalSpeed()
-    {
-        Vector3 velocity = fishRigidbody.linearVelocity;
-        Vector3 horizontalVelocity = new Vector3(velocity.x, 0f, velocity.z);
-
-        if (horizontalVelocity.magnitude > fishDefinition.maxSpeed)
+        if (steeringMagnitude < MinimumVelocityMagnitude)
         {
-            horizontalVelocity =
-                horizontalVelocity.normalized * fishDefinition.maxSpeed;
+            fishRigidbody.linearVelocity = Vector3.zero;
+            return;
         }
 
+        float speedRatio = Mathf.Clamp01(
+            steeringMagnitude / steeringForMaximumSpeed);
+
+        Vector3 targetVelocity =
+            horizontalSteering.normalized *
+            fishDefinition.maxSpeed *
+            speedRatio;
+
+        Vector3 currentVelocity = fishRigidbody.linearVelocity;
+        currentVelocity.y = 0f;
+
+        Vector3 adjustedVelocity = Vector3.MoveTowards(
+            currentVelocity,
+            targetVelocity,
+            fishDefinition.turnResponsiveness * Time.fixedDeltaTime);
+
         fishRigidbody.linearVelocity = new Vector3(
-            horizontalVelocity.x,
+            adjustedVelocity.x,
             0f,
-            horizontalVelocity.z);
+            adjustedVelocity.z);
     }
+
+
 
     private void ConstrainToWaterBounds()
     {
@@ -222,5 +236,6 @@ public sealed class FishMovementController : MonoBehaviour
     private void OnValidate()
     {
         swimmingHeight = Mathf.Max(0f, swimmingHeight);
+        steeringForMaximumSpeed = Mathf.Max(MinimumVelocityMagnitude,steeringForMaximumSpeed);
     }
 }

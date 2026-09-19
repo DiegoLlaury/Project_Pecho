@@ -45,6 +45,6 @@ public sealed class FishingInputReader : MonoBehaviour
             return 0f;
         }
 
-        return positivePressed ? 1f : -1f;
+        return positivePressed ? -1f : 1f;
     }
 }

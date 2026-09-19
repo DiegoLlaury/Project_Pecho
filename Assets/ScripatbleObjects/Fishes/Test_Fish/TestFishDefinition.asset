@@ -15,9 +15,9 @@ MonoBehaviour:
   maxEndurance: 100
   escapeAcceleration: 4
   maxSpeed: 5
-  turnResponsiveness: 8
-  resistanceToPull: 0.35
-  lateralResistance: 0.2
+  turnResponsiveness: 12
+  resistanceToPull: 0.25
+  lateralResistance: 0.25
   tensionGainMultiplier: 1
   enduranceDrainMultiplier: 1
   catchRadius: 1
