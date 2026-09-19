@@ -47,7 +47,7 @@ public sealed class TestFishMovement : MonoBehaviour
     {
         if (!moveOnStart)
         {
-            fishMovementController.SetSteering(Vector3.zero);
+            //fishMovementController.SetSteering(Vector3.zero);
             return;
         }
 
@@ -57,16 +57,16 @@ public sealed class TestFishMovement : MonoBehaviour
 
         if (horizontalDirection.sqrMagnitude < MinimumDirectionMagnitude)
         {
-            fishMovementController.SetSteering(Vector3.zero);
+            //fishMovementController.SetSteering(Vector3.zero);
             return;
         }
 
         Vector3 steering =
             horizontalDirection.normalized *
-            fishDefinition.escapeAcceleration *
+            //fishDefinition.escapeAcceleration *
             steeringMultiplier;
 
-        fishMovementController.SetSteering(steering);
+        //fishMovementController.SetSteering(steering);
     }
 
     /// <summary>
