@@ -1,11 +1,8 @@
 using UnityEngine;
 
-public class FishingState
+public enum FishingState
 {
-    public enum FishingStateEnum
-    {
-        Active,
-        Caught,
-        Escaped
-    }
+    Active,
+    Caught,
+    Escaped
 }

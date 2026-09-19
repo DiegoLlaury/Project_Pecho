@@ -12,12 +12,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: edfd0afe864087c46a13b7dc27705661, type: 3}
   m_Name: TestFishDefinition
   m_EditorClassIdentifier: Assembly-CSharp::FishDefinition
-  maxEndurance: 0
-  escapeAcceleration: 0
-  maxSpeed: 0
-  turnResponssiveness: 0
-  resistanceToPull: 0
-  lateralRestistance: 0
-  tensionGainMultiplier: 0
-  enduranceDrainMultiplier: 0
-  catchRadius: 0
+  maxEndurance: 100
+  escapeAcceleration: 4
+  maxSpeed: 5
+  turnResponsiveness: 8
+  resistanceToPull: 0.35
+  lateralResistance: 0.2
+  tensionGainMultiplier: 1
+  enduranceDrainMultiplier: 1
+  catchRadius: 1
