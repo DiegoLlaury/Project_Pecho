@@ -310,7 +310,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::FishingSessionController
   playerTransform: {fileID: 715600867}
   rodTip: {fileID: 144138654}
-  hookedFish: {fileID: 1935361725}
   fishDefinition: {fileID: 11400000, guid: 5d5ea197cd4caab4a9dac5fdc18a1d75, type: 2}
   fishingInputReader: {fileID: 1775574083}
   fishEscapeAI: {fileID: 1935361730}
@@ -318,22 +317,16 @@ MonoBehaviour:
   waterBounds: {fileID: 1780875136}
   catchZone: {fileID: 753516821}
   fishingLinePresenter: {fileID: 1823550031}
-  pullAcceleration: 8
-  lateralAcceleration: 3
-  releaseTensionReductionPerSecond: 0.7
-  relaxedLineLength: 25
-  lineStretchForMaximumTension: 8
-  stretchTensionMultiplier: 1
-  opposingForceTensionMultiplier: 0.04
-  tensionGainPerSecond: 0.25
-  tensionRecoveryPerSecond: 0.15
+  reelForce: 120
+  lateralForce: 180
+  pullTensionRate: 0.6
+  burstTensionRate: 0.3
+  releaseTensionRecovery: 0.7
+  idleTensionRecovery: 0.25
   breakThreshold: 0.98
   breakDuration: 2.5
-  pullTensionGainPerSecond: 0.16
-  fishRunTensionGainPerSecond: 0.12
-  slackTensionRecoveryPerSecond: 0.2
+  breakTimerDecayMultiplier: 2
   enduranceDrainPerSecond: 12
-  oppositionThreshold: 0.35
 --- !u!1 &335947685
 GameObject:
   m_ObjectHideFlags: 0
@@ -1299,7 +1292,7 @@ Transform:
   m_GameObject: {fileID: 1780875134}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -4.06, y: 0, z: 12.49}
+  m_LocalPosition: {x: -4.06, y: 0, z: 13.84}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1499,6 +1492,7 @@ GameObject:
   - component: {fileID: 1935361728}
   - component: {fileID: 1935361727}
   - component: {fileID: 1935361730}
+  - component: {fileID: 1935361731}
   m_Layer: 0
   m_Name: HookedFish
   m_TagString: Untagged
@@ -1536,9 +1530,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FishMovementController
   fishRigidbody: {fileID: 1935361728}
-  swimmingHeight: 0.9
   rotateTowardsVelocity: 1
-  steeringForMaximumSpeed: 4
+  maxTurnSpeedDegrees: 180
+  minimumSpeedToTurn: 0.15
+  fullTurnSpeedRatio: 0.4
 --- !u!54 &1935361728
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -1601,9 +1596,31 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3d406e73287b8464cb25d3a63a13d115, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FishEscapeAI
-  variationFrequency: 0.8
-  variationStrength: 0.35
+  wanderFrequency: 0.8
+  wanderStrength: 0.35
   behaviorSeed: 0
+  sideAvoidZone: 0.35
+  sideAvoidStrength: 0.6
+--- !u!114 &1935361731
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1935361724}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3744b1df2be6f8b4a81502ff712bd07c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FishBodyAnimator
+  movementController: {fileID: 1935361727}
+  visualRoot: {fileID: 891541449}
+  waveAngleDegrees: 10
+  waveFrequencyAtReferenceSpeed: 3.5
+  referenceSpeed: 3
+  maxBankDegrees: 25
+  bankDegreesPerYawRate: 0.15
+  bankSmoothing: 8
 --- !u!1 &1946478266
 GameObject:
   m_ObjectHideFlags: 0

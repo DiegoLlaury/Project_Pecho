@@ -3,11 +3,20 @@ using UnityEngine.InputSystem;
 
 public sealed class FishingInputReader : MonoBehaviour
 {
-    private const float MinimumInputMagnitude = 0.001f;
+    /// <summary>
+    /// Effort de traction, de 0 à 1 (flèche haut).
+    /// </summary>
+    public float PullInput { get; private set; }
 
-    public Vector2 FightInput { get; private set; }
+    /// <summary>
+    /// Relâchement du fil, de 0 à 1 (flèche bas).
+    /// </summary>
+    public float ReleaseInput { get; private set; }
 
-    public bool HasFightInput => FightInput.sqrMagnitude > MinimumInputMagnitude;
+    /// <summary>
+    /// Direction latérale, de -1 (gauche) à 1 (droite).
+    /// </summary>
+    public float LateralInput { get; private set; }
 
     private void Update()
     {
@@ -15,24 +24,21 @@ public sealed class FishingInputReader : MonoBehaviour
 
         if (keyboard == null)
         {
-            FightInput = Vector2.zero;
+            PullInput = 0f;
+            ReleaseInput = 0f;
+            LateralInput = 0f;
             return;
         }
 
-        float horizontalInput = ReadAxis(
+        bool up = keyboard.upArrowKey.isPressed;
+        bool down = keyboard.downArrowKey.isPressed;
+
+        PullInput = up && !down ? 0f : 1f;
+        ReleaseInput = down && !up ? 0f : 1f;
+
+        LateralInput = ReadAxis(
             keyboard.leftArrowKey.isPressed,
             keyboard.rightArrowKey.isPressed);
-
-        float verticalInput = ReadAxis(
-            keyboard.downArrowKey.isPressed,
-            keyboard.upArrowKey.isPressed);
-
-        FightInput = new Vector2(horizontalInput, verticalInput);
-
-        if (FightInput.sqrMagnitude > 1f)
-        {
-            FightInput.Normalize();
-        }
     }
 
     /// <summary>
@@ -45,6 +51,6 @@ public sealed class FishingInputReader : MonoBehaviour
             return 0f;
         }
 
-        return positivePressed ? -1f : 1f;
+        return positivePressed ? 1f : -1f;
     }
 }

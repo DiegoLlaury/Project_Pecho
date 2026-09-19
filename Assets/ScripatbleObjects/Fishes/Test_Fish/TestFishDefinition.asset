@@ -13,11 +13,19 @@ MonoBehaviour:
   m_Name: TestFishDefinition
   m_EditorClassIdentifier: Assembly-CSharp::FishDefinition
   maxEndurance: 100
-  escapeAcceleration: 4
-  maxSpeed: 5
-  turnResponsiveness: 12
+  enduranceDrainMultiplier: 3
+  enduranceRecoveryPerSecond: 2
+  escapeForce: 1.2
+  idleForceMultiplier: 0.3
+  exhaustedForceMultiplier: 0.15
   resistanceToPull: 0.25
   lateralResistance: 0.25
+  maxSpeed: 3
+  drag: 2
+  turnResponsiveness: 12
+  burstForceMultiplier: 1.6
+  burstDuration: 1.5
+  minTimeBetweenBursts: 3
+  maxTimeBetweenBursts: 6
+  burstMinEndurance: 0.15
   tensionGainMultiplier: 1
-  enduranceDrainMultiplier: 1
-  catchRadius: 1
