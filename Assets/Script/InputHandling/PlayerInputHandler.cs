@@ -6,7 +6,6 @@ using UnityEngine.InputSystem;
 public class PlayerInputHandler : MonoBehaviour, IPlayerInput
 {
     public Vector2 MoveInput { get; private set; }
-    public Vector2 LookInput { get; private set; }
     public bool IsRunning { get; private set; }
 
     public event Action JumpPressed;
