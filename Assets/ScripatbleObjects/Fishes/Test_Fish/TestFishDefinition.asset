@@ -15,15 +15,15 @@ MonoBehaviour:
   maxEndurance: 100
   enduranceDrainMultiplier: 3
   enduranceRecoveryPerSecond: 2
-  escapeForce: 1.2
+  escapeForce: 8
   idleForceMultiplier: 0.3
   exhaustedForceMultiplier: 0.15
   resistanceToPull: 0.25
   lateralResistance: 0.25
-  maxSpeed: 3
+  maxSpeed: 5
   drag: 2
   turnResponsiveness: 12
-  burstForceMultiplier: 1.6
+  burstForceMultiplier: 1.9
   burstDuration: 1.5
   minTimeBetweenBursts: 3
   maxTimeBetweenBursts: 6

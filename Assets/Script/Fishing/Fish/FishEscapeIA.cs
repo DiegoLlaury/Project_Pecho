@@ -29,6 +29,17 @@ public sealed class FishEscapeAI : MonoBehaviour
     [Tooltip("Force max de la poussée vers le centre. 1 = aussi forte que la fuite vers le large ; < 1 = le poisson peut encore longer le bord.")]
     [SerializeField, Range(0f, 1f)] private float sideAvoidStrength = 0.6f;
 
+    [Header("Global Water Boundaries")]
+    [Tooltip(
+    "Force qui ramène le poisson vers l'intérieur lorsqu'il approche " +
+    "de n'importe quel bord."
+)]
+    [SerializeField, Range(0f, 3f)]
+    private float boundaryAvoidanceStrength = 1.5f;
+
+    [SerializeField, Range(0.05f, 0.5f)]
+    private float boundaryAvoidanceZone = 0.2f;
+
     private struct WaterFrame
     {
         public Vector3 awayFromBank;
@@ -110,26 +121,42 @@ public sealed class FishEscapeAI : MonoBehaviour
     /// Retourne une direction horizontale normalisée : vers le large, avec dérive latérale
     /// et poussée douce loin des bords gauche/droit.
     /// </summary>
-    public Vector3 GetEscapeDirection(Vector3 fishPosition, Vector3 anglerPosition)
+    public Vector3 GetEscapeDirection(
+    Vector3 fishPosition,
+    Vector3 anglerPosition)
     {
-        WaterFrame frame = BuildWaterFrame(fishPosition, anglerPosition);
+        WaterFrame frame =
+            BuildWaterFrame(
+                fishPosition,
+                anglerPosition);
 
-        float lateralSteering = Mathf.Clamp(
-            ComputeWanderSteering() + ComputeSideWallSteering(frame),
-            -1f,
-            1f);
+        float lateralSteering =
+            Mathf.Clamp(
+                ComputeWanderSteering() +
+                ComputeSideWallSteering(frame),
+                -1f,
+                1f);
 
         Vector3 direction =
             frame.awayFromBank +
-            frame.lateralAxis * lateralSteering;
+            frame.lateralAxis *
+            lateralSteering;
 
-        if (direction.sqrMagnitude < MinimumDirectionMagnitude)
+        // Empêche le poisson de rester bloqué contre le bord opposé.
+        direction +=
+            ComputeBoundarySteering(
+                fishPosition);
+
+        if (direction.sqrMagnitude <
+            MinimumDirectionMagnitude)
         {
-            direction = frame.awayFromBank;
+            direction =
+                frame.awayFromBank;
         }
 
         lastFishPosition = fishPosition;
-        lastEscapeDirection = direction.normalized;
+        lastEscapeDirection =
+            direction.normalized;
 
         return lastEscapeDirection;
     }
@@ -139,13 +166,17 @@ public sealed class FishEscapeAI : MonoBehaviour
     /// "Loin de la berge" est donc l'axe opposé, et "latéral" l'axe perpendiculaire.
     /// Sans zone d'eau connue, on retombe sur "s'éloigner du pêcheur" sans évitement de bords.
     /// </summary>
-    private WaterFrame BuildWaterFrame(Vector3 fishPosition, Vector3 anglerPosition)
+    private WaterFrame BuildWaterFrame(
+    Vector3 fishPosition,
+    Vector3 anglerPosition)
     {
         WaterFrame frame = new WaterFrame();
 
         if (waterBounds == null)
         {
-            Vector3 awayFromAngler = fishPosition - anglerPosition;
+            Vector3 awayFromAngler =
+                fishPosition - anglerPosition;
+
             awayFromAngler.y = 0f;
 
             if (awayFromAngler.sqrMagnitude < MinimumDirectionMagnitude)
@@ -154,36 +185,162 @@ public sealed class FishEscapeAI : MonoBehaviour
                 awayFromAngler.y = 0f;
             }
 
-            frame.awayFromBank = awayFromAngler.normalized;
-            frame.lateralAxis = Vector3.Cross(Vector3.up, frame.awayFromBank);
-            frame.halfLateralExtent = 0f;
+            frame.awayFromBank =
+                awayFromAngler.normalized;
+
+            frame.lateralAxis =
+                Vector3.Cross(
+                    Vector3.up,
+                    frame.awayFromBank);
+
             return frame;
         }
 
         Bounds bounds = waterBounds.bounds;
-        Vector3 anglerOffset = anglerPosition - bounds.center;
 
-        float xRatio = Mathf.Abs(anglerOffset.x) / Mathf.Max(MinimumExtent, bounds.extents.x);
-        float zRatio = Mathf.Abs(anglerOffset.z) / Mathf.Max(MinimumExtent, bounds.extents.z);
+        float distanceLeft =
+            Mathf.Abs(
+                anglerPosition.x -
+                bounds.min.x);
 
-        bool bankOnXAxis = xRatio > zRatio;
+        float distanceRight =
+            Mathf.Abs(
+                bounds.max.x -
+                anglerPosition.x);
 
-        if (bankOnXAxis)
+        float distanceBack =
+            Mathf.Abs(
+                anglerPosition.z -
+                bounds.min.z);
+
+        float distanceFront =
+            Mathf.Abs(
+                bounds.max.z -
+                anglerPosition.z);
+
+        float smallestDistance =
+            Mathf.Min(
+                distanceLeft,
+                distanceRight,
+                distanceBack,
+                distanceFront);
+
+        if (Mathf.Approximately(
+            smallestDistance,
+            distanceLeft))
         {
-            frame.awayFromBank = new Vector3(-Mathf.Sign(anglerOffset.x), 0f, 0f);
+            // Berge à gauche -> fuite vers la droite.
+            frame.awayFromBank = Vector3.right;
             frame.lateralAxis = Vector3.forward;
-            frame.lateralOffset = fishPosition.z - bounds.center.z;
-            frame.halfLateralExtent = bounds.extents.z;
+            frame.lateralOffset =
+                fishPosition.z -
+                bounds.center.z;
+            frame.halfLateralExtent =
+                bounds.extents.z;
+        }
+        else if (Mathf.Approximately(
+            smallestDistance,
+            distanceRight))
+        {
+            // Berge à droite -> fuite vers la gauche.
+            frame.awayFromBank = Vector3.left;
+            frame.lateralAxis = Vector3.forward;
+            frame.lateralOffset =
+                fishPosition.z -
+                bounds.center.z;
+            frame.halfLateralExtent =
+                bounds.extents.z;
+        }
+        else if (Mathf.Approximately(
+            smallestDistance,
+            distanceBack))
+        {
+            // Berge derrière -> fuite vers l'avant.
+            frame.awayFromBank = Vector3.forward;
+            frame.lateralAxis = Vector3.right;
+            frame.lateralOffset =
+                fishPosition.x -
+                bounds.center.x;
+            frame.halfLateralExtent =
+                bounds.extents.x;
         }
         else
         {
-            frame.awayFromBank = new Vector3(0f, 0f, -Mathf.Sign(anglerOffset.z));
+            // Berge devant -> fuite vers l'arrière.
+            frame.awayFromBank = Vector3.back;
             frame.lateralAxis = Vector3.right;
-            frame.lateralOffset = fishPosition.x - bounds.center.x;
-            frame.halfLateralExtent = bounds.extents.x;
+            frame.lateralOffset =
+                fishPosition.x -
+                bounds.center.x;
+            frame.halfLateralExtent =
+                bounds.extents.x;
         }
 
         return frame;
+    }
+
+    private Vector3 ComputeBoundarySteering(
+    Vector3 fishPosition)
+    {
+        if (waterBounds == null)
+        {
+            return Vector3.zero;
+        }
+
+        Bounds bounds = waterBounds.bounds;
+
+        float zoneX =
+            Mathf.Max(
+                MinimumExtent,
+                bounds.extents.x *
+                boundaryAvoidanceZone);
+
+        float zoneZ =
+            Mathf.Max(
+                MinimumExtent,
+                bounds.extents.z *
+                boundaryAvoidanceZone);
+
+        float left =
+            1f -
+            Mathf.InverseLerp(
+                bounds.min.x,
+                bounds.min.x + zoneX,
+                fishPosition.x);
+
+        float right =
+            Mathf.InverseLerp(
+                bounds.max.x - zoneX,
+                bounds.max.x,
+                fishPosition.x);
+
+        float back =
+            1f -
+            Mathf.InverseLerp(
+                bounds.min.z,
+                bounds.min.z + zoneZ,
+                fishPosition.z);
+
+        float front =
+            Mathf.InverseLerp(
+                bounds.max.z - zoneZ,
+                bounds.max.z,
+                fishPosition.z);
+
+        Vector3 steering =
+            Vector3.right * left +
+            Vector3.left * right +
+            Vector3.forward * back +
+            Vector3.back * front;
+
+        if (steering.sqrMagnitude <
+            MinimumDirectionMagnitude)
+        {
+            return Vector3.zero;
+        }
+
+        return steering.normalized *
+               boundaryAvoidanceStrength;
     }
 
     /// <summary>

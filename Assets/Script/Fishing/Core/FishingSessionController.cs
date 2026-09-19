@@ -4,6 +4,7 @@ using UnityEngine;
 public sealed class FishingSessionController : MonoBehaviour
 {
     private const float Epsilon = 0.001f;
+    private const float ResistanceRecoveryThresholdRatio = 0.35f;
 
     [Header("Required References")]
     [SerializeField] private Transform playerTransform;
@@ -17,57 +18,75 @@ public sealed class FishingSessionController : MonoBehaviour
     [SerializeField] private FishingLinePresenter fishingLinePresenter;
 
     [Header("Player")]
-    [Tooltip("Force de traction maximale du joueur. Doit dépasser l'escapeForce des poissons.")]
+    [Tooltip("Accélération maximale de traction du joueur.")]
     [SerializeField, Min(0f)] private float reelForce = 12f;
+
+    [Tooltip("Force latérale du joueur.")]
     [SerializeField, Min(0f)] private float lateralForce = 6f;
 
+    [Tooltip(
+        "Résistance maximale que le poisson peut réellement opposer pendant que le joueur tire. " +
+        "0.9 signifie que le joueur reste toujours légèrement plus fort."
+    )]
+    [SerializeField, Range(0.5f, 1f)]
+    private float maxFishResistanceWhilePulling = 0.9f;
+
+    [Tooltip(
+        "Part de la force du poisson utilisée pour son déplacement latéral. " +
+        "Le reste sert au duel joueur/poisson."
+    )]
+    [SerializeField, Range(0f, 1f)]
+    private float fishLateralMovementRatio = 0.35f;
+
     [Header("Tension")]
-    [Tooltip("Tension gagnée par seconde en tirant contre un poisson qui force autant que le joueur.")]
-    [SerializeField, Min(0f)] private float pullTensionRate = 0.6f;
-    [Tooltip("Tension gagnée par seconde pendant une ruée, sauf si le joueur relâche.")]
-    [SerializeField, Min(0f)] private float burstTensionRate = 0.3f;
-    [SerializeField, Min(0f)] private float releaseTensionRecovery = 0.7f;
-    [SerializeField, Min(0f)] private float idleTensionRecovery = 0.25f;
-    [SerializeField, Range(0.5f, 1f)] private float breakThreshold = 1f;
-    [SerializeField, Min(0.1f)] private float breakDuration = 2.5f;
-    [Tooltip("Vitesse de décroissance du timer de rupture quand la tension repasse sous le seuil.")]
-    [SerializeField, Min(0f)] private float breakTimerDecayMultiplier = 2f;
+    [SerializeField, Min(0f)]
+    private float pullTensionRate = 0.55f;
+
+    [SerializeField, Min(0f)]
+    private float burstTensionRate = 0.3f;
+
+    [SerializeField, Min(0f)]
+    private float releaseTensionRecovery = 0.9f;
+
+    [SerializeField, Min(0f)]
+    private float idleTensionRecovery = 0.3f;
+
+    [SerializeField, Range(0.5f, 1f)]
+    private float breakThreshold = 1f;
+
+    [SerializeField, Min(0.1f)]
+    private float breakDuration = 2.5f;
+
+    [SerializeField, Min(0f)]
+    private float breakTimerDecayMultiplier = 2f;
+
+    [SerializeField, Min(0f)]
+    private float lateralTensionRate = 0.12f;
 
     [Header("Endurance")]
-    [SerializeField, Min(0f)] private float enduranceDrainPerSecond = 12f;
+    [SerializeField, Min(0f)]
+    private float enduranceDrainPerSecond = 12f;
 
     private float currentEndurance;
     private float normalizedTension;
     private float breakTimer;
+
     private bool isConfigured;
     private bool hasLoggedConfigurationWarning;
 
-    /// <summary>
-    /// État actuel de la session de pêche.
-    /// </summary>
     public FishingState State { get; private set; } = FishingState.Active;
 
-    /// <summary>
-    /// Tension de la ligne, normalisée entre 0 et 1.
-    /// </summary>
     public float NormalizedTension => normalizedTension;
 
-    /// <summary>
-    /// Endurance restante du poisson, normalisée entre 0 et 1.
-    /// </summary>
     public float NormalizedEndurance =>
         fishDefinition == null
             ? 0f
-            : Mathf.Clamp01(currentEndurance / fishDefinition.maxEndurance);
+            : Mathf.Clamp01(
+                currentEndurance / Mathf.Max(Epsilon, fishDefinition.maxEndurance));
 
-    /// <summary>
-    /// Progression du timer de rupture, de 0 à 1 (1 = le fil casse). Utile pour l'UI.
-    /// </summary>
-    public float BreakProgress => Mathf.Clamp01(breakTimer / breakDuration);
+    public float BreakProgress =>
+        Mathf.Clamp01(breakTimer / breakDuration);
 
-    /// <summary>
-    /// Événement déclenché à chaque transition d'état de la session.
-    /// </summary>
     public event Action<FishingState> StateChanged;
 
     private void Start()
@@ -75,9 +94,6 @@ public sealed class FishingSessionController : MonoBehaviour
         ResetSession();
     }
 
-    /// <summary>
-    /// Simulation : forces, endurance, tension, capture et rupture. Tout en pas fixe.
-    /// </summary>
     private void FixedUpdate()
     {
         if (!isConfigured || State != FishingState.Active)
@@ -87,17 +103,74 @@ public sealed class FishingSessionController : MonoBehaviour
 
         float deltaTime = Time.fixedDeltaTime;
 
-        float pull = fishingInputReader.PullInput;
-        float release = fishingInputReader.ReleaseInput;
-        float lateral = fishingInputReader.LateralInput;
+        float pull = Mathf.Clamp01(fishingInputReader.PullInput);
+        float release = Mathf.Clamp01(fishingInputReader.ReleaseInput);
+        float lateral = Mathf.Clamp(
+            fishingInputReader.LateralInput,
+            -1f,
+            1f);
 
-        fishEscapeAI.Tick(deltaTime, NormalizedEndurance);
+        fishEscapeAI.Tick(
+            deltaTime,
+            NormalizedEndurance);
+
+        Vector3 fishPosition = fishMovementController.Position;
+
+        Vector3 directionToPlayer =
+            playerTransform.position - fishPosition;
+
+        directionToPlayer.y = 0f;
+
+        if (directionToPlayer.sqrMagnitude < Epsilon)
+        {
+            return;
+        }
+
+        directionToPlayer.Normalize();
+
+        Vector3 awayFromPlayer = -directionToPlayer;
+
+        Vector3 escapeDirection =
+            fishEscapeAI.GetEscapeDirection(
+                fishPosition,
+                playerTransform.position);
 
         float fishForce = ComputeFishForce(pull);
 
-        ApplyForces(pull, lateral, fishForce);
-        UpdateEndurance(pull, fishForce, deltaTime);
-        UpdateTension(pull, release, fishForce, deltaTime);
+        float effectiveReelForce =
+            reelForce *
+            (1f - Mathf.Clamp01(fishDefinition.resistanceToPull));
+
+        float fishResistanceForce =
+            ComputeFishResistanceForce(
+                fishForce,
+                escapeDirection,
+                awayFromPlayer,
+                pull,
+                effectiveReelForce);
+
+        ApplyForces(
+            pull,
+            lateral,
+            directionToPlayer,
+            escapeDirection,
+            effectiveReelForce,
+            fishForce,
+            fishResistanceForce);
+
+        UpdateEndurance(
+            pull,
+            fishResistanceForce,
+            effectiveReelForce,
+            deltaTime);
+
+        UpdateTension(
+            pull,
+            release,
+            lateral,
+            fishResistanceForce,
+            effectiveReelForce,
+            deltaTime);
 
         TryCatchFish();
 
@@ -109,9 +182,6 @@ public sealed class FishingSessionController : MonoBehaviour
         UpdateBreakTimer(deltaTime);
     }
 
-    /// <summary>
-    /// Présentation : orientation du joueur et ligne, à la fréquence de rendu.
-    /// </summary>
     private void Update()
     {
         if (!isConfigured || State != FishingState.Active)
@@ -120,19 +190,16 @@ public sealed class FishingSessionController : MonoBehaviour
         }
 
         OrientPlayerTowardsFish();
-        UpdateLinePresentation();
+        fishingLinePresenter.SetLineTension(normalizedTension);
     }
 
-    /// <summary>
-    /// Réinitialise l'endurance, la tension et l'état de la session.
-    /// </summary>
     public void ResetSession()
     {
         isConfigured = ValidateConfiguration();
-        enabled = isConfigured;
 
         if (!isConfigured)
         {
+            enabled = false;
             return;
         }
 
@@ -140,17 +207,28 @@ public sealed class FishingSessionController : MonoBehaviour
         normalizedTension = 0f;
         breakTimer = 0f;
 
-        fishMovementController.Configure(fishDefinition, waterBounds);
-        fishEscapeAI.Configure(fishDefinition, waterBounds);
-        fishingLinePresenter.Configure(rodTip, fishMovementController.transform);
-        fishingLinePresenter.SetLineTension(normalizedTension);
+        fishMovementController.Stop();
+
+        fishMovementController.Configure(
+            fishDefinition,
+            waterBounds);
+
+        fishEscapeAI.Configure(
+            fishDefinition,
+            waterBounds);
+
+        fishingLinePresenter.Configure(
+            rodTip,
+            fishMovementController.transform);
+
+        fishingLinePresenter.SetLineTension(0f);
 
         SetState(FishingState.Active);
     }
 
     private bool ValidateConfiguration()
     {
-        bool hasValidConfiguration =
+        bool valid =
             playerTransform != null &&
             rodTip != null &&
             fishDefinition != null &&
@@ -161,106 +239,174 @@ public sealed class FishingSessionController : MonoBehaviour
             catchZone != null &&
             fishingLinePresenter != null;
 
-        if (!hasValidConfiguration && !hasLoggedConfigurationWarning)
+        if (!valid && !hasLoggedConfigurationWarning)
         {
             Debug.LogWarning(
-                $"{nameof(FishingSessionController)} on '{name}' is disabled " +
-                "because one or more required references are missing.",
+                $"{nameof(FishingSessionController)} on '{name}' " +
+                "has missing references.",
                 this);
 
             hasLoggedConfigurationWarning = true;
         }
 
-        return hasValidConfiguration;
+        return valid;
     }
 
-    /// <summary>
-    /// Force actuelle du poisson = escapeForce × fatigue × pression × ruée.
-    /// - fatigue   : plus l'endurance baisse, plus le poisson faiblit.
-    /// - pression  : il ne se bat à fond que si le joueur tire (ou pendant une ruée).
-    /// - ruée      : multiplicateur temporaire décidé par FishEscapeAI.
-    /// </summary>
     private float ComputeFishForce(float pull)
     {
-        float strength = Mathf.Lerp(
-            fishDefinition.exhaustedForceMultiplier,
-            1f,
-            NormalizedEndurance);
-
-        float pressure = fishEscapeAI.IsBursting
-            ? 1f
-            : Mathf.Lerp(fishDefinition.idleForceMultiplier, 1f, pull);
-
-        return fishDefinition.escapeForce *
-               strength *
-               pressure *
-               fishEscapeAI.EffortMultiplier;
-    }
-
-    /// <summary>
-    /// Additionne les forces (fuite du poisson + traction + latéral) et les envoie au mouvement.
-    /// </summary>
-    private void ApplyForces(float pull, float lateral, float fishForce)
-    {
-        Vector3 fishPosition = fishMovementController.Position;
-
-        Vector3 directionToPlayer = playerTransform.position - fishPosition;
-        directionToPlayer.y = 0f;
-
-        if (directionToPlayer.sqrMagnitude < Epsilon)
+        if (currentEndurance <= Epsilon)
         {
-            fishMovementController.SetAcceleration(Vector3.zero);
-            return;
+            return 0f;
         }
 
-        directionToPlayer.Normalize();
+        float enduranceFactor = NormalizedEndurance;
 
-        Vector3 escapeDirection = fishEscapeAI.GetEscapeDirection(
-            fishPosition,
-            playerTransform.position);
+        float pressureFactor =
+            fishEscapeAI.IsBursting
+                ? 1f
+                : Mathf.Lerp(
+                    fishDefinition.idleForceMultiplier,
+                    1f,
+                    pull);
 
-        // Droite du joueur lorsqu'il fait face au poisson.
-        Vector3 playerRight = Vector3.Cross(Vector3.up, -directionToPlayer);
+        float force =
+            fishDefinition.escapeForce *
+            enduranceFactor *
+            pressureFactor *
+            fishEscapeAI.EffortMultiplier;
 
-        float pullForce =
-            pull *
-            reelForce *
-            (1f - fishDefinition.resistanceToPull);
+        return Mathf.Max(0f, force);
+    }
 
-        float sideForce =
+    private float ComputeFishResistanceForce(
+        float fishForce,
+        Vector3 escapeDirection,
+        Vector3 awayFromPlayer,
+        float pull,
+        float effectiveReelForce)
+    {
+        /*
+         * Seule la composante du déplacement du poisson
+         * qui s'oppose réellement à la traction fatigue le joueur.
+         */
+        float escapeAlongLine =
+            Mathf.Max(
+                0f,
+                Vector3.Dot(
+                    escapeDirection,
+                    awayFromPlayer));
+
+        float resistanceForce =
+            fishForce * escapeAlongLine;
+
+        /*
+         * Le joueur doit toujours rester légèrement plus fort
+         * pendant la traction.
+         */
+        if (pull > Epsilon)
+        {
+            resistanceForce = Mathf.Min(
+                resistanceForce,
+                effectiveReelForce *
+                maxFishResistanceWhilePulling);
+        }
+
+        return resistanceForce;
+    }
+
+    private void ApplyForces(
+    float pull,
+    float lateral,
+    Vector3 directionToPlayer,
+    Vector3 escapeDirection,
+    float effectiveReelForce,
+    float fishForce,
+    float fishResistanceForce)
+    {
+        Vector3 awayFromPlayer = -directionToPlayer;
+
+        float playerReelAcceleration =
+            pull * effectiveReelForce;
+
+        float netReelAcceleration =
+            playerReelAcceleration -
+            fishResistanceForce;
+
+        Vector3 playerReelForce =
+            directionToPlayer *
+            netReelAcceleration;
+
+        float escapeOpposition =
+            Mathf.Max(
+                0f,
+                Vector3.Dot(
+                    escapeDirection,
+                    awayFromPlayer));
+
+        float directEscapeForce =
+            fishForce *
+            escapeOpposition;
+
+        Vector3 fishEscapeForce =
+            escapeDirection *
+            directEscapeForce;
+
+        Vector3 playerRight =
+            Vector3.Cross(
+                Vector3.up,
+                -directionToPlayer);
+
+        float playerLateralAcceleration =
             lateral *
             lateralForce *
             (1f - fishDefinition.lateralResistance);
 
-        Vector3 totalAcceleration =
-            escapeDirection * fishForce +
-            directionToPlayer * pullForce +
-            playerRight * sideForce;
+        Vector3 playerLateralForce =
+            playerRight *
+            playerLateralAcceleration;
 
-        fishMovementController.SetAcceleration(totalAcceleration);
+        Vector3 totalAcceleration =
+            playerReelForce +
+            fishEscapeForce +
+            playerLateralForce;
+
+        fishMovementController.SetAcceleration(
+            totalAcceleration);
     }
 
-    /// <summary>
-    /// Tirer contre un poisson qui force le fatigue ; se reposer lui laisse récupérer.
-    /// </summary>
-    private void UpdateEndurance(float pull, float fishForce, float deltaTime)
+
+    private void UpdateEndurance(
+    float pull,
+    float fishResistanceForce,
+    float effectiveReelForce,
+    float deltaTime)
     {
-        if (pull > Epsilon)
+        float recoveryThreshold =
+            fishDefinition.maxEndurance *
+            ResistanceRecoveryThresholdRatio;
+
+        bool canResist =
+            currentEndurance >= recoveryThreshold;
+
+        if (pull > Epsilon && canResist)
         {
-            float fishEffort =
-                fishForce / Mathf.Max(Epsilon, fishDefinition.escapeForce);
+            float resistance01 =
+                Mathf.Clamp01(
+                    fishResistanceForce /
+                    Mathf.Max(Epsilon, effectiveReelForce));
 
             currentEndurance -=
                 pull *
-                fishEffort *
+                resistance01 *
                 enduranceDrainPerSecond *
                 fishDefinition.enduranceDrainMultiplier *
                 deltaTime;
         }
-        else
+        else if (pull <= Epsilon)
         {
             currentEndurance +=
-                fishDefinition.enduranceRecoveryPerSecond * deltaTime;
+                fishDefinition.enduranceRecoveryPerSecond *
+                deltaTime;
         }
 
         currentEndurance = Mathf.Clamp(
@@ -269,39 +415,68 @@ public sealed class FishingSessionController : MonoBehaviour
             fishDefinition.maxEndurance);
     }
 
-    /// <summary>
-    /// La tension vient de la charge sur la ligne : (force du poisson / force du joueur) quand on tire,
-    /// plus un bonus pendant une ruée. Relâcher ou se reposer la fait redescendre.
-    /// </summary>
+
     private void UpdateTension(
         float pull,
         float release,
-        float fishForce,
+        float lateral,
+        float fishResistanceForce,
+        float effectiveReelForce,
         float deltaTime)
     {
-        bool isBursting = fishEscapeAI.IsBursting;
+        bool isBursting =
+            fishEscapeAI.IsBursting;
 
-        float loadRatio = Mathf.Clamp01(
-            fishForce / Mathf.Max(Epsilon, reelForce));
+        float load01 =
+            pull > Epsilon
+                ? Mathf.Clamp01(
+                    fishResistanceForce /
+                    Mathf.Max(Epsilon, effectiveReelForce))
+                : 0f;
 
-        float gain = pull * loadRatio * pullTensionRate;
+        /*
+         * Même avec un poisson faible, tirer produit un peu de tension.
+         * Plus le poisson résiste, plus la tension grimpe vite.
+         */
+        float gain =
+            pull *
+            Mathf.Lerp(
+                0.15f,
+                1f,
+                load01) *
+            pullTensionRate;
 
         if (isBursting)
         {
-            gain += (1f - release) * burstTensionRate;
+            gain +=
+                (1f - release) *
+                burstTensionRate;
         }
 
-        gain *= fishDefinition.tensionGainMultiplier;
+        gain +=
+            Mathf.Abs(lateral) *
+            lateralTensionRate;
 
-        float recovery = release * releaseTensionRecovery;
+        gain *=
+            fishDefinition.tensionGainMultiplier;
 
-        if (pull <= Epsilon && !isBursting)
+        float recovery =
+            release *
+            releaseTensionRecovery;
+
+        if (pull <= Epsilon &&
+            !isBursting &&
+            Mathf.Abs(lateral) <= Epsilon)
         {
-            recovery += idleTensionRecovery;
+            recovery +=
+                idleTensionRecovery;
         }
 
-        normalizedTension = Mathf.Clamp01(
-            normalizedTension + (gain - recovery) * deltaTime);
+        normalizedTension =
+            Mathf.Clamp01(
+                normalizedTension +
+                (gain - recovery) *
+                deltaTime);
     }
 
     private void UpdateBreakTimer(float deltaTime)
@@ -312,7 +487,8 @@ public sealed class FishingSessionController : MonoBehaviour
 
             if (breakTimer >= breakDuration)
             {
-                EndSession(FishingState.Escaped);
+                EndSession(
+                    FishingState.Escaped);
             }
 
             return;
@@ -320,12 +496,19 @@ public sealed class FishingSessionController : MonoBehaviour
 
         breakTimer = Mathf.Max(
             0f,
-            breakTimer - deltaTime * breakTimerDecayMultiplier);
+            breakTimer -
+            deltaTime *
+            breakTimerDecayMultiplier);
     }
 
     private void TryCatchFish()
     {
-        if (currentEndurance > 0f || !IsFishInsideCatchZone())
+        if (currentEndurance > 0f)
+        {
+            return;
+        }
+
+        if (!IsFishInsideCatchZone())
         {
             return;
         }
@@ -333,22 +516,23 @@ public sealed class FishingSessionController : MonoBehaviour
         EndSession(FishingState.Caught);
     }
 
-    /// <summary>
-    /// Test en XZ uniquement : la hauteur de nage du poisson ne doit pas empêcher la capture.
-    /// </summary>
     private bool IsFishInsideCatchZone()
     {
         Bounds zone = catchZone.bounds;
-        Vector3 position = fishMovementController.Position;
+        Vector3 position =
+            fishMovementController.Position;
 
-        return position.x >= zone.min.x && position.x <= zone.max.x &&
-               position.z >= zone.min.z && position.z <= zone.max.z;
+        return position.x >= zone.min.x &&
+               position.x <= zone.max.x &&
+               position.z >= zone.min.z &&
+               position.z <= zone.max.z;
     }
 
     private void OrientPlayerTowardsFish()
     {
         Vector3 directionToFish =
-            fishMovementController.transform.position - playerTransform.position;
+            fishMovementController.transform.position -
+            playerTransform.position;
 
         directionToFish.y = 0f;
 
@@ -357,17 +541,14 @@ public sealed class FishingSessionController : MonoBehaviour
             return;
         }
 
-        playerTransform.rotation = Quaternion.LookRotation(
-            directionToFish.normalized,
-            Vector3.up);
+        playerTransform.rotation =
+            Quaternion.LookRotation(
+                directionToFish.normalized,
+                Vector3.up);
     }
 
-    private void UpdateLinePresentation()
-    {
-        fishingLinePresenter.SetLineTension(normalizedTension);
-    }
-
-    private void EndSession(FishingState finalState)
+    private void EndSession(
+        FishingState finalState)
     {
         if (State != FishingState.Active)
         {
@@ -375,8 +556,11 @@ public sealed class FishingSessionController : MonoBehaviour
         }
 
         fishMovementController.Stop();
+
         SetState(finalState);
-        UpdateLinePresentation();
+
+        fishingLinePresenter.SetLineTension(
+            normalizedTension);
     }
 
     private void SetState(FishingState newState)
