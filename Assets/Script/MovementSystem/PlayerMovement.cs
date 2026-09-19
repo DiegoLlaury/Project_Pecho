@@ -1,6 +1,4 @@
 using UnityEngine;
-using UnityEngine.Rendering.Universal.Internal;
-using UnityEngine.XR;
 
 [RequireComponent(typeof(CharacterController))]
 [RequireComponent(typeof(PlayerInputHandler))]
@@ -71,38 +69,40 @@ public class PlayerMovement : MonoBehaviour
     void Update()
     {
         bool isRunning = input.IsRunning;
-
         if (move != input.MoveInput)
         {
             move = input.MoveInput;
-            float speed = isRunning ? runSpeed : walkSpeed;
-            movementDirectionY = moveDirection.y;
 
-            ///
             Vector3 forwardDirection = (new Vector3(activeCam.transform.forward.x, 0, activeCam.transform.forward.z)).normalized;
             Vector3 rightDirection = (new Vector3(activeCam.transform.right.x, 0, activeCam.transform.right.z)).normalized;
 
+            float speed = isRunning ? runSpeed : walkSpeed;
             worldMove = canMove ? (forwardDirection * move.y + rightDirection * move.x) * speed : Vector3.zero;
         }
 
         moveDirection = worldMove;
-        moveDirection.y = movementDirectionY;
 
+     
         bool grounded = characterController.isGrounded;
 
         if (jumpQueued && canMove && grounded)
         {
             moveDirection.y = jumpPower;
         }
-
-        if (!grounded)
+        else if (grounded)
         {
-            moveDirection.y -= gravity * Time.deltaTime;
+            moveDirection.y = movementDirectionY < 0f ? -2f : movementDirectionY;
         }
+        else
+        {
+            moveDirection.y = movementDirectionY - gravity * Time.deltaTime;
+        }
+
+        movementDirectionY = moveDirection.y;
 
         characterController.Move(moveDirection * Time.deltaTime);
 
-        
+
         if (move != Vector2.zero)
         {
             targetRotation = Quaternion.LookRotation(worldMove).eulerAngles.y;
