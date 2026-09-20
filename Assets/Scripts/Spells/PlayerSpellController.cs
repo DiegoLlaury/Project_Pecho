@@ -27,6 +27,11 @@ public sealed class PlayerSpellController : MonoBehaviour
         else if (keyboard.digit4Key.wasPressedThisFrame) TryCastSlot(3);
     }
 
+    private void OnDisable()
+    {
+        spellCaster?.CancelCasting();
+    }
+
     private void OnValidate()
     {
         if (equippedSpells == null || equippedSpells.Length != MaximumSpellSlots)
@@ -76,6 +81,13 @@ public sealed class PlayerSpellController : MonoBehaviour
         }
 
         return castStarted;
+    }
+
+    /// <summary>Réinitialise le mana et les lancements de sorts pour un nouveau combat.</summary>
+    public void ResetCombatState()
+    {
+        combatMana?.ResetMana();
+        spellCaster?.ResetCombatState();
     }
 
     /// <summary>Retourne le sort équipé dans un emplacement ou null.</summary>

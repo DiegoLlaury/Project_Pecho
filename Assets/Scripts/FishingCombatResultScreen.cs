@@ -99,6 +99,8 @@ public sealed class FishingCombatResultScreen : MonoBehaviour
         Cursor.lockState = previousCursorLockMode;
         Cursor.visible = previousCursorVisibility;
 
+        playerSpellController?.ResetCombatState();
+
         if (fishingSessionController != null)
         {
             fishingSessionController.ResetSession();

@@ -15,7 +15,7 @@ public sealed class FishIdentificationHudPresenter : MonoBehaviour
     {
         if (identificationState != null)
         {
-            identificationState.Revealed += Refresh;
+            identificationState.IdentificationChanged += Refresh;
         }
 
         Refresh();
@@ -25,7 +25,7 @@ public sealed class FishIdentificationHudPresenter : MonoBehaviour
     {
         if (identificationState != null)
         {
-            identificationState.Revealed -= Refresh;
+            identificationState.IdentificationChanged -= Refresh;
         }
     }
 

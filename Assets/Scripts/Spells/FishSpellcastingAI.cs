@@ -26,7 +26,14 @@ public sealed class FishSpellcastingAI : MonoBehaviour
     {
         target = configuredTarget;
         enduranceResource = configuredEnduranceResource;
+        spellCaster?.ResetCombatState();
         timeUntilCastDecision = RollDecisionDelay();
+    }
+
+    /// <summary>Annule le lancement de sort en cours lorsque la session se termine.</summary>
+    public void CancelCasting()
+    {
+        spellCaster?.CancelCasting();
     }
 
     /// <summary>Adapte les décisions de sort à l'endurance actuelle du poisson.</summary>

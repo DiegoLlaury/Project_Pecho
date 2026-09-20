@@ -8,6 +8,7 @@ public sealed class FishIdentificationState : MonoBehaviour
     public FishIdentityDefinition Identity => identity;
     public bool IsRevealed { get; private set; }
     public event Action Revealed;
+    public event Action IdentificationChanged;
 
     /// <summary>Révèle définitivement les informations du poisson pour la session courante.</summary>
     public void Reveal()
@@ -19,5 +20,18 @@ public sealed class FishIdentificationState : MonoBehaviour
 
         IsRevealed = true;
         Revealed?.Invoke();
+        IdentificationChanged?.Invoke();
+    }
+
+    /// <summary>Masque les informations révélées pour une nouvelle session.</summary>
+    public void ResetIdentification()
+    {
+        if (!IsRevealed)
+        {
+            return;
+        }
+
+        IsRevealed = false;
+        IdentificationChanged?.Invoke();
     }
 }

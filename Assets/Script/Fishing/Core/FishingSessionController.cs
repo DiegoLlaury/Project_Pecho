@@ -278,6 +278,7 @@ public class FishingSessionController : MonoBehaviour, ISpendableEndurance
         lateralBoostTracker.Reset();
 
         fishMovementController.Stop();
+        fishMovementController.GetComponent<FishIdentificationState>()?.ResetIdentification();
 
         fishMovementController.Configure(
             fishDefinition,
@@ -298,6 +299,12 @@ public class FishingSessionController : MonoBehaviour, ISpendableEndurance
         fishingLinePresenter.SetLineTension(0f);
 
         SetState(FishingState.Active);
+    }
+
+    /// <summary>Termine la session lorsque le joueur n'a plus d'endurance de combat.</summary>
+    public void EndFromPlayerExhaustion()
+    {
+        EndSession(FishingState.Escaped);
     }
 
     /// <summary>Ajoute immédiatement une surtension normalisée à la ligne.</summary>
@@ -749,6 +756,7 @@ public class FishingSessionController : MonoBehaviour, ISpendableEndurance
         }
 
         fishMovementController.Stop();
+        fishSpellcastingAI.CancelCasting();
 
         SetState(finalState);
 

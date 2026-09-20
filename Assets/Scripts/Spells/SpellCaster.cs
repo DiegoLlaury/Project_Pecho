@@ -15,6 +15,8 @@ public sealed class SpellCaster : MonoBehaviour
     private readonly Dictionary<SpellType, float> nextCastTimes = new Dictionary<SpellType, float>();
     private readonly HashSet<GameObject> affectedTargets = new HashSet<GameObject>();
     private readonly Collider[] impactColliderBuffer = new Collider[ImpactColliderBufferCapacity];
+    private GameObject activeTelegraph;
+    private GameObject activeProjectile;
 
     public bool IsCasting { get; private set; }
 
@@ -110,14 +112,15 @@ public sealed class SpellCaster : MonoBehaviour
         ATBActionModifiers modifiers)
     {
         float castDuration = GetCastDuration(spell);
-        GameObject telegraph = CreateVisual(spell.telegraphPrefab, targetPosition, Quaternion.identity);
-        if (telegraph != null)
+        activeTelegraph = CreateVisual(spell.telegraphPrefab, targetPosition, Quaternion.identity);
+        if (activeTelegraph != null)
         {
-            telegraph.transform.localScale = Vector3.one * (spell.impactRadius * 2f);
+            activeTelegraph.transform.localScale = Vector3.one * (spell.impactRadius * 2f);
         }
 
         yield return AnimateProjectile(spell, targetPosition, castDuration);
-        DestroyVisual(telegraph);
+        DestroyVisual(activeTelegraph);
+        activeTelegraph = null;
         CreateTimedImpact(spell, targetPosition);
         ApplyAreaImpact(spell, targetPosition, modifiers);
         IsCasting = false;
@@ -172,7 +175,7 @@ public sealed class SpellCaster : MonoBehaviour
         float travelDuration)
     {
         Vector3 origin = castOrigin != null ? castOrigin.position : transform.position;
-        GameObject projectile = CreateVisual(spell.projectilePrefab, origin, Quaternion.identity);
+        activeProjectile = CreateVisual(spell.projectilePrefab, origin, Quaternion.identity);
         float elapsed = 0f;
 
         while (elapsed < travelDuration)
@@ -180,9 +183,9 @@ public sealed class SpellCaster : MonoBehaviour
             elapsed += Time.deltaTime;
             float progress = Mathf.Clamp01(elapsed / travelDuration);
 
-            if (projectile != null)
+            if (activeProjectile != null)
             {
-                projectile.transform.position = EvaluateArcPosition(
+                activeProjectile.transform.position = EvaluateArcPosition(
                     origin,
                     targetPosition,
                     spell.projectileArcHeight,
@@ -195,7 +198,7 @@ public sealed class SpellCaster : MonoBehaviour
 
                 if (travelDirection.sqrMagnitude > MinimumDirectionMagnitude)
                 {
-                    projectile.transform.rotation = Quaternion.LookRotation(
+                    activeProjectile.transform.rotation = Quaternion.LookRotation(
                         travelDirection.normalized,
                         Vector3.up);
                 }
@@ -204,7 +207,8 @@ public sealed class SpellCaster : MonoBehaviour
             yield return null;
         }
 
-        DestroyVisual(projectile);
+        DestroyVisual(activeProjectile);
+        activeProjectile = null;
     }
 
     private static float GetCastDuration(SpellType spell)
@@ -291,11 +295,28 @@ public sealed class SpellCaster : MonoBehaviour
         }
     }
 
-    private void OnDisable()
+    /// <summary>Annule le lancement courant et nettoie ses visuels temporaires.</summary>
+    public void CancelCasting()
     {
         StopAllCoroutines();
+        DestroyVisual(activeTelegraph);
+        DestroyVisual(activeProjectile);
+        activeTelegraph = null;
+        activeProjectile = null;
         IsCasting = false;
         affectedTargets.Clear();
+    }
+
+    /// <summary>Annule le lancement courant et rend tous les sorts immédiatement disponibles.</summary>
+    public void ResetCombatState()
+    {
+        CancelCasting();
+        nextCastTimes.Clear();
+    }
+
+    private void OnDisable()
+    {
+        CancelCasting();
     }
 
     private static Vector3 EvaluateArcPosition(
