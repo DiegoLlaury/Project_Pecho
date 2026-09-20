@@ -82,6 +82,16 @@ public sealed class ATBTimingController : MonoBehaviour
         return modifiers;
     }
 
+    /// <summary>Signale la réussite d'une action maintenue démarrée dans la fenêtre ATB.</summary>
+    public void ReportContinuousActionSuccess()
+    {
+        ATBActionModifiers modifiers = new ATBActionModifiers(
+            continuousActionMultiplier,
+            1f,
+            true);
+        ActionEvaluated?.Invoke(modifiers);
+    }
+
     private void UpdateSpawning(float deltaTime)
     {
         spawnTimer -= deltaTime;

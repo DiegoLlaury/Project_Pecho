@@ -6,6 +6,7 @@ public sealed class SpellCaster : MonoBehaviour
 {
     private const float MinimumCastDuration = 0.05f;
     private const float MinimumDirectionMagnitude = 0.0001f;
+    private const float MinimumTelegraphScale = 4f;
     private const int ImpactColliderBufferCapacity = 32;
 
     [SerializeField] private SpellTeam team = SpellTeam.Neutral;
@@ -112,11 +113,7 @@ public sealed class SpellCaster : MonoBehaviour
         ATBActionModifiers modifiers)
     {
         float castDuration = GetCastDuration(spell);
-        activeTelegraph = CreateVisual(spell.telegraphPrefab, targetPosition, Quaternion.identity);
-        if (activeTelegraph != null)
-        {
-            activeTelegraph.transform.localScale = Vector3.one * (spell.impactRadius * 2f);
-        }
+        activeTelegraph = CreateTelegraph(spell, targetPosition);
 
         yield return AnimateProjectile(spell, targetPosition, castDuration);
         DestroyVisual(activeTelegraph);
@@ -133,10 +130,16 @@ public sealed class SpellCaster : MonoBehaviour
         ATBActionModifiers modifiers)
     {
         float castDuration = GetCastDuration(spell);
+        activeTelegraph = CreateTelegraph(
+            spell,
+            target.transform.position,
+            target.transform);
 
         if (spell.deliveryMode == SpellDeliveryMode.Projectile)
         {
             yield return AnimateProjectile(spell, predictedTargetPosition, castDuration);
+            DestroyVisual(activeTelegraph);
+            activeTelegraph = null;
             if (target != null)
             {
                 CreateTimedImpact(spell, target.transform.position);
@@ -152,16 +155,14 @@ public sealed class SpellCaster : MonoBehaviour
                 yield return null;
             }
 
+            DestroyVisual(activeTelegraph);
+            activeTelegraph = null;
             if (target != null)
             {
-                if (spell.deliveryMode == SpellDeliveryMode.TargetEffect)
-                {
-                    CreateTimedImpact(
-                        spell,
-                        target.transform.position,
-                        target.transform);
-                }
-
+                CreateTimedImpact(
+                    spell,
+                    target.transform.position,
+                    target.transform);
                 ExecuteEffects(spell, target, modifiers);
             }
         }
@@ -219,6 +220,32 @@ public sealed class SpellCaster : MonoBehaviour
         return Mathf.Max(MinimumCastDuration, duration);
     }
 
+    private static GameObject CreateTelegraph(
+        SpellType spell,
+        Vector3 position,
+        Transform parent = null)
+    {
+        GameObject telegraph = CreateVisual(
+            spell.telegraphPrefab,
+            position,
+            Quaternion.identity);
+        if (telegraph == null)
+        {
+            return null;
+        }
+
+        if (parent != null)
+        {
+            telegraph.AddComponent<SpellTargetVisualFollower>().Initialize(parent);
+        }
+
+        float telegraphScale = Mathf.Max(
+            MinimumTelegraphScale,
+            spell.impactRadius * 2f);
+        telegraph.transform.localScale = Vector3.one * telegraphScale;
+        return telegraph;
+    }
+
     private static void CreateTimedImpact(
         SpellType spell,
         Vector3 position,
@@ -229,7 +256,7 @@ public sealed class SpellCaster : MonoBehaviour
         {
             if (parent != null)
             {
-                impact.transform.SetParent(parent, true);
+                impact.AddComponent<SpellTargetVisualFollower>().Initialize(parent);
             }
 
             Destroy(impact, Mathf.Max(MinimumCastDuration, spell.impactVisualDuration));

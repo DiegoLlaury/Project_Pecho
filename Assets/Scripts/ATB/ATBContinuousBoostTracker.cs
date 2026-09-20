@@ -19,6 +19,10 @@ public sealed class ATBContinuousBoostTracker
         if (!wasInputActive)
         {
             isBoostArmed = timingController != null && timingController.IsBoostWindowActive;
+            if (isBoostArmed)
+            {
+                timingController.ReportContinuousActionSuccess();
+            }
         }
 
         wasInputActive = true;

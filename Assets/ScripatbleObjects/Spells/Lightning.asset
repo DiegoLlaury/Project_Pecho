@@ -20,11 +20,12 @@ MonoBehaviour:
   manaCost: 30
   enduranceCost: 15
   impactRadius: 1.8
-  impactVisualDuration: 0.35
+  impactVisualDuration: 1.5
   effects:
   - {fileID: 11400000, guid: 83f24b1b9e751db488da8aa345b5c100, type: 2}
   - {fileID: 11400000, guid: c96cb5f604205114ba6fb473c43d29ca, type: 2}
+  deliveryMode: 0
   projectileArcHeight: 6
-  telegraphPrefab: {fileID: 3781190759905221837, guid: 544cb23a5531a824195919b35687363e, type: 3}
-  projectilePrefab: {fileID: 2297947740126731078, guid: dc23af090560d7449a11507cb3f12567, type: 3}
-  impactPrefab: {fileID: 7888578484376117987, guid: 148390f2511ae294992f7e7b6ec41b53, type: 3}
+  telegraphPrefab: {fileID: 3997050252106023209, guid: b6d533c1f1c0b5e449007e5d9ec17f48, type: 3}
+  projectilePrefab: {fileID: 3473529909581181512, guid: a572e3aa73cca09408edb0bfb505eb66, type: 3}
+  impactPrefab: {fileID: 8293317240253350088, guid: cef7397b5b8b5234dac85645663a2d48, type: 3}

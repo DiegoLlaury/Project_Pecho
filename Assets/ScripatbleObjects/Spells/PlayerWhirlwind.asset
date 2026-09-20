@@ -25,6 +25,6 @@ MonoBehaviour:
   - {fileID: 11400000, guid: af0cf5a420a01374d80d6cc0a5bbe2bb, type: 2}
   deliveryMode: 1
   projectileArcHeight: 4.5
-  telegraphPrefab: {fileID: 0}
+  telegraphPrefab: {fileID: 3997050252106023209, guid: b6d533c1f1c0b5e449007e5d9ec17f48, type: 3}
   projectilePrefab: {fileID: 0}
-  impactPrefab: {fileID: 7463159285847797319, guid: 25fd44d26ef3cad47a2730f8161821c2, type: 3}
+  impactPrefab: {fileID: 9105173788584523450, guid: 9ff0c3c56351ef34a91215ea3ccc33af, type: 3}
