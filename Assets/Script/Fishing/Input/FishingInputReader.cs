@@ -33,8 +33,8 @@ public sealed class FishingInputReader : MonoBehaviour
         bool up = keyboard.upArrowKey.isPressed;
         bool down = keyboard.downArrowKey.isPressed;
 
-        PullInput = up && !down ? 1f : 0f;
-        ReleaseInput = down && !up ? 1f : 0f;
+        PullInput = down && !up ? 1f : 0f;
+        ReleaseInput = up && !down ? 1f : 0f;
 
         LateralInput = ReadAxis(
             keyboard.leftArrowKey.isPressed,

@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 59ae1941b7ba0e4469419ff3aa562cc3, type: 3}
+  m_Name: Lightning
+  m_EditorClassIdentifier: Assembly-CSharp::SpellType
+  spellName: "\xC9clair"
+  icon: {fileID: 21300000, guid: 2f08001fdce85aa489f9c6330af47138, type: 3}
+  cooldown: 6.5
+  minimumWarningDuration: 1.5
+  maximumWarningDuration: 2.1
+  manaCost: 30
+  enduranceCost: 32
+  impactRadius: 1.8
+  impactVisualDuration: 0.35
+  effects:
+  - {fileID: 11400000, guid: 83f24b1b9e751db488da8aa345b5c100, type: 2}
+  - {fileID: 11400000, guid: c96cb5f604205114ba6fb473c43d29ca, type: 2}
+  telegraphPrefab: {fileID: 3781190759905221837, guid: 544cb23a5531a824195919b35687363e, type: 3}
+  projectilePrefab: {fileID: 2297947740126731078, guid: dc23af090560d7449a11507cb3f12567, type: 3}
+  impactPrefab: {fileID: 7888578484376117987, guid: 148390f2511ae294992f7e7b6ec41b53, type: 3}
