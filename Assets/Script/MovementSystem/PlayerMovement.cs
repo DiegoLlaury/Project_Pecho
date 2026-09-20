@@ -13,6 +13,7 @@ public class PlayerMovement : MonoBehaviour
     public AudioClip LandingAudioClip;
     public AudioClip[] FootstepAudioClips;
     public Camera activeCam;
+    public bool isRunning;
     [Range(0, 1)] public float FootstepAudioVolume = 0.5f;
 
     [Tooltip("How fast the model turns to face the input direction, in seconds")]
@@ -68,9 +69,10 @@ public class PlayerMovement : MonoBehaviour
 
     void Update()
     {
-        bool isRunning = input.IsRunning;
-        if (move != input.MoveInput)
+        
+        if (move != input.MoveInput || isRunning != input.IsRunning)
         {
+            isRunning = input.IsRunning;
             move = input.MoveInput;
 
             Vector3 forwardDirection = (new Vector3(activeCam.transform.forward.x, 0, activeCam.transform.forward.z)).normalized;
@@ -82,7 +84,6 @@ public class PlayerMovement : MonoBehaviour
 
         moveDirection = worldMove;
 
-     
         bool grounded = characterController.isGrounded;
 
         if (jumpQueued && canMove && grounded)
@@ -97,6 +98,8 @@ public class PlayerMovement : MonoBehaviour
         {
             moveDirection.y = movementDirectionY - gravity * Time.deltaTime;
         }
+
+        grounded = characterController.isGrounded;
 
         movementDirectionY = moveDirection.y;
 
