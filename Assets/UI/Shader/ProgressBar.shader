@@ -2,7 +2,8 @@ Shader "UI/ProgressBar"
 {
     Properties
     {
-        _FillTex ("Fill Texture", 2D) = "white" {}
+        _FillTexA ("Fill Texture A", 2D) = "white" {}
+        _FillTexB ("Fill Texture B", 2D) = "white" {}
         _EmptyTex ("Empty Texture", 2D) = "white" {}
 
         _Progress ("Progress", Range(0,1)) = 0.5
@@ -41,7 +42,8 @@ Shader "UI/ProgressBar"
 
             #include "UnityCG.cginc"
 
-            sampler2D _FillTex;
+            sampler2D _FillTexA;
+            sampler2D _FillTexB;
             sampler2D _EmptyTex;
 
             float _Progress;
@@ -77,24 +79,29 @@ Shader "UI/ProgressBar"
 
             fixed4 frag(v2f i) : SV_Target
             {
-                fixed4 fill = tex2D(_FillTex, i.uv);
+                fixed4 fillA = tex2D(_FillTexA, i.uv);
+                fixed4 fillB = tex2D(_FillTexB, i.uv);
                 fixed4 empty = tex2D(_EmptyTex, i.uv);
 
-                // Pick X or Y.
+                // Horizontal or vertical position
                 float position = lerp(i.uv.x, i.uv.y, _Axis);
 
-                // Reverse direction.
+                // Reverse direction
                 position = lerp(position, 1.0 - position, _Direction);
 
-                // Where progress ends.
+                // Remapped progress range
                 float cutoff = lerp(_Start, _End, _Progress);
 
-                // Fill before cutoff, empty after.
+                // Fill / empty mask
                 float mask = step(position, cutoff);
 
+                // Lerp between the two fill textures based on progress
+                fixed4 fill = lerp(fillA, fillB, _Progress);
+
+                // Fill or empty
                 fixed4 result = lerp(empty, fill, mask);
 
-                // Preserve UI Image color/alpha.
+                // UI color / alpha
                 result *= i.color;
 
                 return result;

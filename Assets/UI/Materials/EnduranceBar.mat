@@ -31,6 +31,14 @@ Material:
         m_Texture: {fileID: 2800000, guid: 5067daa25d7f2984590d1a6c17b43c52, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
+    - _FillTexA:
+        m_Texture: {fileID: 2800000, guid: 5067daa25d7f2984590d1a6c17b43c52, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _FillTexB:
+        m_Texture: {fileID: 2800000, guid: 5067daa25d7f2984590d1a6c17b43c52, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
     - _MainTex:
         m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
