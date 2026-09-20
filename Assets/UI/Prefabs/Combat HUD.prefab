@@ -162,6 +162,7 @@ GameObject:
   - component: {fileID: 4846358649410210543}
   - component: {fileID: 8171292751407869361}
   - component: {fileID: 5764880072812292072}
+  - component: {fileID: 7214722240955010353}
   m_Layer: 5
   m_Name: ATB Mask
   m_TagString: Untagged
@@ -240,6 +241,30 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Mask
   m_ShowMaskGraphic: 0
+--- !u!114 &7214722240955010353
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3160107413373003113}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 801010eb48496454985cb6fc8d1d9911, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ATBTimingController
+  waveContainer: {fileID: 3836949869344374772}
+  waveTemplate: {fileID: 804923446480399816}
+  indicatorHalfWidth: 8
+  maximumConcurrentWaves: 2
+  minimumGap: 20
+  spawnInterval: 4.2
+  minimumWaveWidth: 90
+  maximumWaveWidth: 150
+  waveSpeed: 100
+  actionPotencyMultiplier: 1.5
+  cooldownMultiplier: 0.7
+  continuousActionMultiplier: 1.5
 --- !u!1 &4064841073821627568
 GameObject:
   m_ObjectHideFlags: 0

@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: edfd0afe864087c46a13b7dc27705661, type: 3}
   m_Name: TestFishDefinition
   m_EditorClassIdentifier: Assembly-CSharp::FishDefinition
-  maxEndurance: 250
+  maxEndurance: 400
   enduranceDrainMultiplier: 3
   enduranceRecoveryPerSecond: 1
   escapeForce: 15

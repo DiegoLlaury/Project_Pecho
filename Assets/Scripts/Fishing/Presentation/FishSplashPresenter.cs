@@ -41,6 +41,12 @@ public sealed class FishSplashPresenter : MonoBehaviour
     private void Start()
     {
         isConfigured = ValidateConfiguration();
+        if (!isConfigured)
+        {
+            return;
+        }
+
+        SpawnSplash(regularSplashPrefab, regularSplashScale);
         ResetSplashTimer();
     }
 
@@ -97,17 +103,26 @@ public sealed class FishSplashPresenter : MonoBehaviour
             GetSurfacePosition(),
             Quaternion.identity);
 
+        splashInstance.SetActive(true);
         splashInstance.transform.localScale *= scaleMultiplier;
 
         ParticleSystem[] particleSystems =
             splashInstance.GetComponentsInChildren<ParticleSystem>(true);
 
+        float requiredLifetime = particleLifetime;
         foreach (ParticleSystem particleSystem in particleSystems)
         {
-            particleSystem.Play(true);
+            ParticleSystem.MainModule mainModule = particleSystem.main;
+            float systemLifetime =
+                mainModule.duration + mainModule.startLifetime.constantMax;
+            requiredLifetime = Mathf.Max(requiredLifetime, systemLifetime);
+
+            particleSystem.gameObject.SetActive(true);
+            particleSystem.Clear(true);
+            particleSystem.Play(false);
         }
 
-        Destroy(splashInstance, particleLifetime);
+        Destroy(splashInstance, requiredLifetime);
     }
 
     private Vector3 GetSurfacePosition()

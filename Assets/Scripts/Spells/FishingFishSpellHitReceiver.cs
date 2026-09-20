@@ -12,4 +12,13 @@ public sealed class FishingFishSpellHitReceiver : MonoBehaviour, IEnduranceRecei
             fishingSessionController.ApplyFishEnduranceDamage(amount);
         }
     }
+
+    /// <summary>Transmet l'attraction temporaire du tourbillon à la session.</summary>
+    public void ApplyWhirlwind(float duration, float pullAcceleration)
+    {
+        if (fishingSessionController != null)
+        {
+            fishingSessionController.ApplyWhirlwind(duration, pullAcceleration);
+        }
+    }
 }

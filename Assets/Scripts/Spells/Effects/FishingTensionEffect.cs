@@ -8,7 +8,16 @@ public sealed class FishingTensionEffect : SpellEffect
     /// <summary>Ajoute une surtension normalisée à la canne de la cible.</summary>
     public override void Execute(GameObject caster, GameObject target)
     {
+        Execute(caster, target, ATBActionModifiers.Normal);
+    }
+
+    /// <summary>Ajoute une surtension modifiée par le timing ATB capturé.</summary>
+    public override void Execute(
+        GameObject caster,
+        GameObject target,
+        ATBActionModifiers modifiers)
+    {
         IFishingTensionReceiver receiver = target.GetComponentInParent<IFishingTensionReceiver>();
-        receiver?.ApplyTensionSpike(normalizedTensionSpike);
+        receiver?.ApplyTensionSpike(normalizedTensionSpike * modifiers.PotencyMultiplier);
     }
 }

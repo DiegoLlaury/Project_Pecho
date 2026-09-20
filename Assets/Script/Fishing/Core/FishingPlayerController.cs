@@ -8,12 +8,22 @@ using UnityEngine.InputSystem;
 public sealed class FishingPlayerController : MonoBehaviour
 {
     private const float GroundedVerticalVelocity = -2f;
+    private const float AnimationDampTime = 0.1f;
+    private const float DefaultMotionSpeed = 1f;
+    private const float MinimumDirectionSqrMagnitude = 0.001f;
+
+    private static readonly int AnimationSpeed = Animator.StringToHash("Speed");
+    private static readonly int AnimationGrounded = Animator.StringToHash("Grounded");
+    private static readonly int AnimationJump = Animator.StringToHash("Jump");
+    private static readonly int AnimationFreeFall = Animator.StringToHash("FreeFall");
+    private static readonly int AnimationMotionSpeed = Animator.StringToHash("MotionSpeed");
 
     [Header("References")]
     [SerializeField] private CharacterController characterController;
     [SerializeField] private Camera gameplayCamera;
     [SerializeField] private BoxCollider shoreBounds;
     [SerializeField] private Transform fishTransform;
+    [SerializeField] private Animator characterAnimator;
 
     [Header("Movement")]
     [SerializeField, Min(0f)] private float moveSpeed = 4.5f;
@@ -27,6 +37,7 @@ public sealed class FishingPlayerController : MonoBehaviour
     [SerializeField, Range(0.05f, 1f)] private float minimumSpeedAtLineLimit = 0.2f;
 
     private float verticalVelocity;
+    private float horizontalAnimationSpeed;
 
     private void Awake()
     {
@@ -39,6 +50,11 @@ public sealed class FishingPlayerController : MonoBehaviour
         {
             gameplayCamera = Camera.main;
         }
+
+        if (characterAnimator == null)
+        {
+            characterAnimator = GetComponentInChildren<Animator>(true);
+        }
     }
 
     private void Update()
@@ -50,9 +66,12 @@ public sealed class FishingPlayerController : MonoBehaviour
             return;
         }
 
-        UpdateVerticalVelocity(keyboard);
+        Vector2 movementInput = ReadMovementInput(keyboard);
+        bool jumpStarted = UpdateVerticalVelocity(keyboard);
+
         FaceFish();
-        MoveOnShore(ReadMovementInput(keyboard));
+        MoveOnShore(movementInput);
+        UpdateAnimator(jumpStarted);
     }
 
     private Vector2 ReadMovementInput(Keyboard keyboard)
@@ -84,8 +103,10 @@ public sealed class FishingPlayerController : MonoBehaviour
         return new Vector2(horizontal, vertical).normalized;
     }
 
-    private void UpdateVerticalVelocity(Keyboard keyboard)
+    private bool UpdateVerticalVelocity(Keyboard keyboard)
     {
+        bool jumpStarted = false;
+
         if (characterController.isGrounded)
         {
             verticalVelocity = GroundedVerticalVelocity;
@@ -93,12 +114,15 @@ public sealed class FishingPlayerController : MonoBehaviour
             if (keyboard.spaceKey.wasPressedThisFrame)
             {
                 verticalVelocity = jumpSpeed;
+                jumpStarted = true;
             }
         }
         else
         {
             verticalVelocity -= gravity * Time.deltaTime;
         }
+
+        return jumpStarted;
     }
 
     private void MoveOnShore(Vector2 input)
@@ -125,11 +149,38 @@ public sealed class FishingPlayerController : MonoBehaviour
         horizontalDisplacement = PreventLineOverextension(
             horizontalDisplacement);
         horizontalDisplacement = ClampToShore(horizontalDisplacement);
+        horizontalAnimationSpeed = Time.deltaTime > 0f
+            ? horizontalDisplacement.magnitude / Time.deltaTime
+            : 0f;
 
         Vector3 displacement = horizontalDisplacement;
         displacement.y = verticalVelocity * Time.deltaTime;
         characterController.Move(displacement);
     }
+
+    private void UpdateAnimator(bool jumpStarted)
+    {
+        if (characterAnimator == null)
+        {
+            return;
+        }
+
+        bool isGrounded = characterController.isGrounded;
+        characterAnimator.SetFloat(
+            AnimationSpeed,
+            horizontalAnimationSpeed,
+            AnimationDampTime,
+            Time.deltaTime);
+        characterAnimator.SetFloat(AnimationMotionSpeed, DefaultMotionSpeed);
+        characterAnimator.SetBool(AnimationGrounded, isGrounded);
+        characterAnimator.SetBool(AnimationFreeFall, !isGrounded && verticalVelocity < 0f);
+
+        if (jumpStarted)
+        {
+            characterAnimator.SetTrigger(AnimationJump);
+        }
+    }
+
 
     private float GetLineSpeedMultiplier()
     {
@@ -152,7 +203,7 @@ public sealed class FishingPlayerController : MonoBehaviour
         Vector3 playerToFish = fishTransform.position - transform.position;
         playerToFish.y = 0f;
 
-        if (playerToFish.sqrMagnitude <= 0.001f)
+        if (playerToFish.sqrMagnitude <= MinimumDirectionSqrMagnitude)
         {
             return horizontalDisplacement;
         }
@@ -207,7 +258,7 @@ public sealed class FishingPlayerController : MonoBehaviour
         Vector3 directionToFish = fishTransform.position - transform.position;
         directionToFish.y = 0f;
 
-        if (directionToFish.sqrMagnitude > 0.001f)
+        if (directionToFish.sqrMagnitude > MinimumDirectionSqrMagnitude)
         {
             transform.rotation = Quaternion.LookRotation(
                 directionToFish.normalized,

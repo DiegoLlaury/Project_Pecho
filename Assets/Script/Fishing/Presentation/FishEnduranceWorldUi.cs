@@ -13,6 +13,9 @@ public sealed class FishEnduranceWorldUi : MonoBehaviour
     [Header("Presentation")]
     [SerializeField, Min(0f)] private float verticalOffset = 1.1f;
 
+    private static readonly Quaternion CanvasFacingCorrection =
+        Quaternion.Euler(0f, 180f, 0f);
+
     private void Awake()
     {
         ResolveReferences();
@@ -37,7 +40,8 @@ public sealed class FishEnduranceWorldUi : MonoBehaviour
         {
             transform.rotation = Quaternion.LookRotation(
                 directionToCamera,
-                targetCamera.transform.up);
+                targetCamera.transform.up) *
+                CanvasFacingCorrection;
         }
     }
 
