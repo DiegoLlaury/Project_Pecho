@@ -1,10 +1,13 @@
 using System;
 using UnityEngine;
 
-public sealed class FishingSessionController : MonoBehaviour
+public class FishingSessionController : MonoBehaviour
 {
     private const float Epsilon = 0.001f;
-    private const float ResistanceRecoveryThresholdRatio = 0.35f;
+    private const float MinimumStruggleDrainRatio = 0.35f;
+    private const float BurstStruggleDrainMultiplier = 1.25f;
+    private const float ShoreBurstEnduranceCostRatio = 0.25f;
+    private const float DefaultLineDistanceTolerance = 1f;
 
     [Header("Required References")]
     [SerializeField] private Transform playerTransform;
@@ -12,27 +15,28 @@ public sealed class FishingSessionController : MonoBehaviour
     [SerializeField] private FishDefinition fishDefinition;
     [SerializeField] private FishingInputReader fishingInputReader;
     [SerializeField] private FishEscapeAI fishEscapeAI;
+    [SerializeField] private FishSpellcastingAI fishSpellcastingAI;
     [SerializeField] private FishMovementController fishMovementController;
     [SerializeField] private BoxCollider waterBounds;
     [SerializeField] private BoxCollider catchZone;
     [SerializeField] private FishingLinePresenter fishingLinePresenter;
 
     [Header("Player")]
-    [Tooltip("Acc�l�ration maximale de traction du joueur.")]
+    [Tooltip("Accélération maximale de traction du joueur.")]
     [SerializeField, Min(0f)] private float reelForce = 12f;
 
-    [Tooltip("Force lat�rale du joueur.")]
+    [Tooltip("Force latérale du joueur.")]
     [SerializeField, Min(0f)] private float lateralForce = 6f;
 
     [Tooltip(
-        "R�sistance maximale que le poisson peut r�ellement opposer pendant que le joueur tire. " +
-        "0.9 signifie que le joueur reste toujours l�g�rement plus fort."
+        "Résistance maximale que le poisson peut réellement opposer pendant que le joueur tire. " +
+        "0.9 signifie que le joueur reste toujours légèrement plus fort."
     )]
     [SerializeField, Range(0.5f, 1f)]
     private float maxFishResistanceWhilePulling = 0.9f;
 
     [Tooltip(
-        "Part de la force du poisson utilis�e pour son d�placement lat�ral. " +
+        "Part de la force du poisson utilisée pour son déplacement latéral. " +
         "Le reste sert au duel joueur/poisson."
     )]
     [SerializeField, Range(0f, 1f)]
@@ -41,9 +45,6 @@ public sealed class FishingSessionController : MonoBehaviour
     [Header("Tension")]
     [SerializeField, Min(0f)]
     private float pullTensionRate = 0.55f;
-
-    [SerializeField, Min(0f)]
-    private float burstTensionRate = 0.3f;
 
     [SerializeField, Min(0f)]
     private float releaseTensionRecovery = 0.9f;
@@ -63,6 +64,23 @@ public sealed class FishingSessionController : MonoBehaviour
     [SerializeField, Min(0f)]
     private float lateralTensionRate = 0.12f;
 
+    [Tooltip("Surtension appliquée lorsqu'une traction est maintenue pendant une ruée.")]
+    [SerializeField, Min(0f)]
+    private float burstTensionRate = 0.4f;
+
+    [Header("Line Distance")]
+    [Tooltip("Tolérance en mètres avant que l'éloignement du joueur tende la ligne.")]
+    [SerializeField, Min(0f)] private float lineDistanceTolerance = DefaultLineDistanceTolerance;
+
+    [Tooltip("Tension ajoutée par seconde et par mètre lorsque la ligne est trop étirée.")]
+    [SerializeField, Min(0f)] private float distanceTensionRate = 0.08f;
+
+    [Tooltip("Allongement maximal pris en compte dans le calcul de tension.")]
+    [SerializeField, Min(0f)] private float maximumStretchForTension = 4f;
+
+    [Tooltip("Détente appliquée lorsque le joueur réduit la distance avec le poisson.")]
+    [SerializeField, Min(0f)] private float distanceSlackRecoveryRate = 0.06f;
+
     [Header("Endurance")]
     [SerializeField, Min(0f)]
     private float enduranceDrainPerSecond = 12f;
@@ -70,11 +88,14 @@ public sealed class FishingSessionController : MonoBehaviour
     private float currentEndurance;
     private float normalizedTension;
     private float breakTimer;
+    private float referenceLineDistance;
 
     private bool isConfigured;
     private bool hasLoggedConfigurationWarning;
 
     public FishingState State { get; private set; } = FishingState.Active;
+
+    public float CurrentEndurance => currentEndurance;
 
     public float NormalizedTension => normalizedTension;
 
@@ -113,8 +134,23 @@ public sealed class FishingSessionController : MonoBehaviour
         fishEscapeAI.Tick(
             deltaTime,
             NormalizedEndurance);
+        fishSpellcastingAI.Tick(
+            deltaTime,
+            NormalizedEndurance);
 
         Vector3 fishPosition = fishMovementController.Position;
+
+        fishEscapeAI.TryTriggerShoreBurst(fishPosition,NormalizedEndurance);
+
+        if (fishEscapeAI.ConsumeShoreBurstCost())
+        {
+            currentEndurance = Mathf.Max(
+                0f,
+                currentEndurance -
+                fishDefinition.maxEndurance *
+                ShoreBurstEnduranceCostRatio);
+        }
+
 
         Vector3 directionToPlayer =
             playerTransform.position - fishPosition;
@@ -170,6 +206,7 @@ public sealed class FishingSessionController : MonoBehaviour
             lateral,
             fishResistanceForce,
             effectiveReelForce,
+            fishPosition,
             deltaTime);
 
         TryCatchFish();
@@ -213,9 +250,13 @@ public sealed class FishingSessionController : MonoBehaviour
             fishDefinition,
             waterBounds);
 
+        referenceLineDistance = GetHorizontalLineDistance(
+            fishMovementController.Position);
+
         fishEscapeAI.Configure(
             fishDefinition,
             waterBounds);
+        fishSpellcastingAI.Configure(playerTransform, this);
 
         fishingLinePresenter.Configure(
             rodTip,
@@ -226,6 +267,40 @@ public sealed class FishingSessionController : MonoBehaviour
         SetState(FishingState.Active);
     }
 
+    /// <summary>Ajoute immédiatement une surtension normalisée à la ligne.</summary>
+    public void ApplyTensionSpike(float normalizedAmount)
+    {
+        if (State != FishingState.Active)
+        {
+            return;
+        }
+
+        normalizedTension = Mathf.Clamp01(normalizedTension + Mathf.Max(0f, normalizedAmount));
+    }
+
+    /// <summary>Retire directement de l'endurance au poisson, notamment pour les futurs sorts du joueur.</summary>
+    public void ApplyFishEnduranceDamage(float amount)
+    {
+        currentEndurance = Mathf.Clamp(
+            currentEndurance - Mathf.Max(0f, amount),
+            0f,
+            fishDefinition != null ? fishDefinition.maxEndurance : 0f);
+    }
+
+    /// <summary>Débite l'endurance du poisson si son solde couvre le coût demandé.</summary>
+    public bool TrySpendFishEndurance(float amount)
+    {
+        float clampedAmount = Mathf.Max(0f, amount);
+        if (clampedAmount > currentEndurance)
+        {
+            return false;
+        }
+
+        currentEndurance -= clampedAmount;
+        return true;
+    }
+
+
     private bool ValidateConfiguration()
     {
         bool valid =
@@ -234,6 +309,7 @@ public sealed class FishingSessionController : MonoBehaviour
             fishDefinition != null &&
             fishingInputReader != null &&
             fishEscapeAI != null &&
+            fishSpellcastingAI != null &&
             fishMovementController != null &&
             waterBounds != null &&
             catchZone != null &&
@@ -260,6 +336,10 @@ public sealed class FishingSessionController : MonoBehaviour
         }
 
         float enduranceFactor = NormalizedEndurance;
+        float fatigueForceMultiplier = Mathf.Lerp(
+            fishDefinition.exhaustedForceMultiplier,
+            1f,
+            enduranceFactor);
 
         float pressureFactor =
             fishEscapeAI.IsBursting
@@ -271,9 +351,10 @@ public sealed class FishingSessionController : MonoBehaviour
 
         float force =
             fishDefinition.escapeForce *
-            enduranceFactor *
+            fatigueForceMultiplier *
             pressureFactor *
-            fishEscapeAI.EffortMultiplier;
+            fishEscapeAI.EffortMultiplier *
+            fishEscapeAI.EnduranceEscapeMultiplier;
 
         return Mathf.Max(0f, force);
     }
@@ -286,8 +367,8 @@ public sealed class FishingSessionController : MonoBehaviour
         float effectiveReelForce)
     {
         /*
-         * Seule la composante du d�placement du poisson
-         * qui s'oppose r�ellement � la traction fatigue le joueur.
+         * Seule la composante du déplacement du poisson
+         * qui s'oppose réellement à la traction fatigue le joueur.
          */
         float escapeAlongLine =
             Mathf.Max(
@@ -300,7 +381,7 @@ public sealed class FishingSessionController : MonoBehaviour
             fishForce * escapeAlongLine;
 
         /*
-         * Le joueur doit toujours rester l�g�rement plus fort
+         * Le joueur doit toujours rester légèrement plus fort
          * pendant la traction.
          */
         if (pull > Epsilon)
@@ -336,20 +417,23 @@ public sealed class FishingSessionController : MonoBehaviour
             directionToPlayer *
             netReelAcceleration;
 
-        float escapeOpposition =
-            Mathf.Max(
-                0f,
-                Vector3.Dot(
-                    escapeDirection,
-                    awayFromPlayer));
-
-        float directEscapeForce =
-            fishForce *
-            escapeOpposition;
-
         Vector3 fishEscapeForce =
             escapeDirection *
-            directEscapeForce;
+            fishForce;
+
+        Vector3 fishRetreatForce =
+            Vector3.Project(
+                fishEscapeForce,
+                awayFromPlayer);
+
+        Vector3 fishLateralEscapeForce =
+            fishEscapeForce -
+            fishRetreatForce;
+
+        fishEscapeForce =
+            fishRetreatForce +
+            fishLateralEscapeForce *
+            fishLateralMovementRatio;
 
         Vector3 playerRight =
             Vector3.Cross(
@@ -381,28 +465,31 @@ public sealed class FishingSessionController : MonoBehaviour
     float effectiveReelForce,
     float deltaTime)
     {
-        float recoveryThreshold =
-            fishDefinition.maxEndurance *
-            ResistanceRecoveryThresholdRatio;
-
-        bool canResist =
-            currentEndurance >= recoveryThreshold;
-
-        if (pull > Epsilon && canResist)
+        if (pull > Epsilon)
         {
-            float resistance01 =
-                Mathf.Clamp01(
-                    fishResistanceForce /
-                    Mathf.Max(Epsilon, effectiveReelForce));
+            float resistance01 = Mathf.Clamp01(
+                fishResistanceForce /
+                Mathf.Max(Epsilon, effectiveReelForce));
+
+            float struggleDrainRatio = Mathf.Lerp(
+                MinimumStruggleDrainRatio,
+                1f,
+                resistance01);
+
+            float burstDrainMultiplier =
+                fishEscapeAI.IsBursting
+                    ? BurstStruggleDrainMultiplier
+                    : 1f;
 
             currentEndurance -=
                 pull *
-                resistance01 *
+                struggleDrainRatio *
+                burstDrainMultiplier *
                 enduranceDrainPerSecond *
                 fishDefinition.enduranceDrainMultiplier *
                 deltaTime;
         }
-        else if (pull <= Epsilon)
+        else
         {
             currentEndurance +=
                 fishDefinition.enduranceRecoveryPerSecond *
@@ -422,6 +509,7 @@ public sealed class FishingSessionController : MonoBehaviour
         float lateral,
         float fishResistanceForce,
         float effectiveReelForce,
+        Vector3 fishPosition,
         float deltaTime)
     {
         bool isBursting =
@@ -435,8 +523,8 @@ public sealed class FishingSessionController : MonoBehaviour
                 : 0f;
 
         /*
-         * M�me avec un poisson faible, tirer produit un peu de tension.
-         * Plus le poisson r�siste, plus la tension grimpe vite.
+         * Même avec un poisson faible, tirer produit un peu de tension.
+         * Plus le poisson résiste, plus la tension grimpe vite.
          */
         float gain =
             pull *
@@ -446,23 +534,41 @@ public sealed class FishingSessionController : MonoBehaviour
                 load01) *
             pullTensionRate;
 
-        if (isBursting)
-        {
-            gain +=
-                (1f - release) *
-                burstTensionRate;
-        }
-
         gain +=
             Mathf.Abs(lateral) *
             lateralTensionRate;
+
+        if (isBursting)
+        {
+            gain += pull * burstTensionRate;
+        }
+
+        float currentLineDistance =
+            GetHorizontalLineDistance(fishPosition);
+
+        float stretchedDistance = Mathf.Clamp(
+            currentLineDistance -
+            referenceLineDistance -
+            lineDistanceTolerance,
+            0f,
+            maximumStretchForTension);
+
+        float slackDistance = Mathf.Max(
+            0f,
+            referenceLineDistance -
+            currentLineDistance -
+            lineDistanceTolerance);
+
+        gain += stretchedDistance * distanceTensionRate;
 
         gain *=
             fishDefinition.tensionGainMultiplier;
 
         float recovery =
             release *
-            releaseTensionRecovery;
+            releaseTensionRecovery +
+            slackDistance *
+            distanceSlackRecoveryRate;
 
         if (pull <= Epsilon &&
             !isBursting &&
@@ -477,6 +583,15 @@ public sealed class FishingSessionController : MonoBehaviour
                 normalizedTension +
                 (gain - recovery) *
                 deltaTime);
+    }
+
+    private float GetHorizontalLineDistance(Vector3 fishPosition)
+    {
+        Vector3 playerPosition = playerTransform.position;
+        playerPosition.y = 0f;
+        fishPosition.y = 0f;
+
+        return Vector3.Distance(playerPosition, fishPosition);
     }
 
     private void UpdateBreakTimer(float deltaTime)

@@ -2,40 +2,55 @@ using UnityEngine;
 using UnityEngine.Serialization;
 
 /// <summary>
-/// DÈcide o˘ le poisson veut nager. Trois comportements additionnÈs (steering) :
+/// D√©cide o√π le poisson veut nager. Trois comportements additionn√©s (steering) :
 /// 1. Fuir la berge : cap constant vers le large, le plus loin possible de la berge.
-/// 2. Errer : dÈrive latÈrale douce et non pÈriodique (bruit de Perlin).
-/// 3. …viter les bords gauche/droit : poussÈe douce vers le centre, jamais totale.
-/// GËre aussi les ruÈes (voir Tick).
+/// 2. Errer : d√©rive lat√©rale douce et non p√©riodique (bruit de Perlin).
+/// 3. √âviter les bords gauche/droit : pouss√©e douce vers le centre, jamais totale.
+/// G√®re aussi les ru√©es (voir Tick).
 /// </summary>
 public sealed class FishEscapeAI : MonoBehaviour
 {
     private const float MinimumDirectionMagnitude = 0.001f;
     private const float MinimumExtent = 0.01f;
-    private const float NoiseSeedStride = 17.31f;
-    private const float NoiseSeedShift = 0.37f;
 
-    [Header("Wander")]
-    [FormerlySerializedAs("variationFrequency")]
-    [SerializeField, Min(0f)] private float wanderFrequency = 0.8f;
-    [FormerlySerializedAs("variationStrength")]
-    [SerializeField, Range(0f, 1f)] private float wanderStrength = 0.35f;
-    [Tooltip("Donner une valeur diffÈrente ‡ chaque poisson pour qu'ils n'errent pas tous pareil.")]
-    [SerializeField] private int behaviorSeed;
+    [Header("Escape Decisions")]
+    [Tooltip("Dur√©e minimale pendant laquelle le poisson maintient son choix lat√©ral.")]
+    [SerializeField, Min(0.05f)]
+    private float minimumDecisionDuration = 0.3f;
+
+    [Tooltip("Dur√©e maximale pendant laquelle le poisson maintient son choix lat√©ral.")]
+    [SerializeField, Min(0.05f)]
+    private float maximumDecisionDuration = 0.8f;
+
+    [Tooltip("Intensit√© minimale des changements de direction lat√©raux.")]
+    [SerializeField, Range(0f, 1f)]
+    private float minimumLateralEscapeStrength = 0.55f;
+
+    [Tooltip("Intensit√© maximale des changements de direction lat√©raux.")]
+    [SerializeField, Range(0f, 1f)]
+    private float maximumLateralEscapeStrength = 1f;
+
+    [Tooltip("Donner une valeur diff√©rente √† chaque poisson pour qu'ils ne prennent pas les m√™mes d√©cisions.")]
+    [SerializeField]
+    private int behaviorSeed;
 
     [Header("Side Walls")]
-    [Tooltip("Part de la demi-largeur, depuis le bord, o˘ l'Èvitement commence (0.35 = les 35 % les plus proches du bord).")]
+    [Tooltip("Part de la demi-largeur, depuis le bord, o√π l'√©vitement commence (0.35 = les 35 % les plus proches du bord).")]
     [SerializeField, Range(0.05f, 1f)] private float sideAvoidZone = 0.35f;
-    [Tooltip("Force max de la poussÈe vers le centre. 1 = aussi forte que la fuite vers le large ; < 1 = le poisson peut encore longer le bord.")]
+    [Tooltip("Force max de la pouss√©e vers le centre. 1 = aussi forte que la fuite vers le large ; < 1 = le poisson peut encore longer le bord.")]
     [SerializeField, Range(0f, 1f)] private float sideAvoidStrength = 0.6f;
 
     [Header("Global Water Boundaries")]
     [Tooltip(
-    "Force qui ramËne le poisson vers l'intÈrieur lorsqu'il approche " +
+    "Force qui ram√®ne le poisson vers l'int√©rieur lorsqu'il approche " +
     "de n'importe quel bord."
 )]
     [SerializeField, Range(0f, 3f)]
     private float boundaryAvoidanceStrength = 1.5f;
+
+    [Header("Endurance Adaptation")]
+    [SerializeField, Min(0f)] private float lowEnduranceEscapeMultiplier = 1.75f;
+    [SerializeField, Min(0f)] private float highEnduranceEscapeMultiplier = 0.6f;
 
     [SerializeField, Range(0.05f, 0.5f)]
     private float boundaryAvoidanceZone = 0.2f;
@@ -50,20 +65,89 @@ public sealed class FishEscapeAI : MonoBehaviour
 
     private FishDefinition fishDefinition;
     private BoxCollider waterBounds;
-    private float noiseOffset;
+    private float currentLateralEscapeStrength;
+    private float timeUntilNextEscapeDecision;
     private float burstTimeRemaining;
     private float timeUntilNextBurst;
+
+    private bool hasPendingShoreBurstCost;
+    private float enduranceEscapeMultiplier = 1f;
+
+    public bool IsShoreBurst { get; private set; }
+
+    /// <summary>
+    /// Pond√©ration de fuite pilot√©e par l'endurance : forte √† faible endurance, faible √† haute endurance.
+    /// </summary>
+    public float EnduranceEscapeMultiplier => enduranceEscapeMultiplier;
+
 
     private Vector3 lastFishPosition;
     private Vector3 lastEscapeDirection;
 
     /// <summary>
-    /// Vrai pendant une ruÈe : le poisson tire ‡ pleine force, quoi que fasse le joueur.
+    /// Vrai pendant une ru√©e : le poisson tire √† pleine force, quoi que fasse le joueur.
     /// </summary>
     public bool IsBursting => burstTimeRemaining > 0f;
 
     /// <summary>
-    /// Multiplicateur d'effort courant : 1 en temps normal, burstForceMultiplier pendant une ruÈe.
+    /// D√©clenche une ru√©e exceptionnelle lorsque le poisson atteint un bord de l'eau.
+    /// </summary>
+    public bool TryTriggerShoreBurst(
+        Vector3 fishPosition,
+        float normalizedEndurance)
+    {
+        if (fishDefinition == null ||
+            waterBounds == null ||
+            IsBursting ||
+            timeUntilNextBurst > 0f ||
+            normalizedEndurance < fishDefinition.burstMinEndurance ||
+            !IsNearShore(fishPosition))
+        {
+            return false;
+        }
+
+        burstTimeRemaining = fishDefinition.burstDuration;
+        hasPendingShoreBurstCost = true;
+        IsShoreBurst = true;
+
+        return true;
+    }
+
+    /// <summary>
+    /// Indique une seule fois qu'une ru√©e de berge doit payer son co√ªt d'endurance.
+    /// </summary>
+    public bool ConsumeShoreBurstCost()
+    {
+        if (!hasPendingShoreBurstCost)
+        {
+            return false;
+        }
+
+        hasPendingShoreBurstCost = false;
+        return true;
+    }
+
+    private bool IsNearShore(Vector3 fishPosition)
+    {
+        Bounds bounds = waterBounds.bounds;
+
+        float zoneX = Mathf.Max(
+            MinimumExtent,
+            bounds.extents.x * boundaryAvoidanceZone);
+
+        float zoneZ = Mathf.Max(
+            MinimumExtent,
+            bounds.extents.z * boundaryAvoidanceZone);
+
+        return fishPosition.x <= bounds.min.x + zoneX ||
+               fishPosition.x >= bounds.max.x - zoneX ||
+               fishPosition.z <= bounds.min.z + zoneZ ||
+               fishPosition.z >= bounds.max.z - zoneZ;
+    }
+
+
+    /// <summary>
+    /// Multiplicateur d'effort courant : 1 en temps normal, burstForceMultiplier pendant une ru√©e.
     /// </summary>
     public float EffortMultiplier =>
         IsBursting && fishDefinition != null
@@ -78,19 +162,40 @@ public sealed class FishEscapeAI : MonoBehaviour
         fishDefinition = definition;
         waterBounds = configuredWaterBounds;
 
-        noiseOffset = behaviorSeed * NoiseSeedStride + NoiseSeedShift;
         burstTimeRemaining = 0f;
         timeUntilNextBurst = RollBurstInterval();
+
+        hasPendingShoreBurstCost = false;
+        IsShoreBurst = false;
+        enduranceEscapeMultiplier = highEnduranceEscapeMultiplier;
+
+        Random.InitState(
+            behaviorSeed != 0
+                ? behaviorSeed
+                : GetInstanceID());
+
+        ChooseNextEscapeDecision();
     }
 
     /// <summary>
-    /// Fait avancer le timer de ruÈe. AppelÈ une fois par pas de simulation par la session.
+    /// Fait avancer le timer de ru√©e. Appel√© une fois par pas de simulation par la session.
     /// </summary>
     public void Tick(float deltaTime, float normalizedEndurance)
     {
         if (fishDefinition == null)
         {
             return;
+        }
+
+        timeUntilNextEscapeDecision -= deltaTime;
+        enduranceEscapeMultiplier = Mathf.Lerp(
+            lowEnduranceEscapeMultiplier,
+            highEnduranceEscapeMultiplier,
+            Mathf.Clamp01(normalizedEndurance));
+
+        if (timeUntilNextEscapeDecision <= 0f)
+        {
+            ChooseNextEscapeDecision();
         }
 
         if (IsBursting)
@@ -100,6 +205,7 @@ public sealed class FishEscapeAI : MonoBehaviour
             if (burstTimeRemaining <= 0f)
             {
                 burstTimeRemaining = 0f;
+                IsShoreBurst = false;
                 timeUntilNextBurst = RollBurstInterval();
             }
 
@@ -118,8 +224,8 @@ public sealed class FishEscapeAI : MonoBehaviour
     }
 
     /// <summary>
-    /// Retourne une direction horizontale normalisÈe : vers le large, avec dÈrive latÈrale
-    /// et poussÈe douce loin des bords gauche/droit.
+    /// Retourne une direction horizontale normalis√©e : vers le large, avec d√©rive lat√©rale
+    /// et pouss√©e douce loin des bords gauche/droit.
     /// </summary>
     public Vector3 GetEscapeDirection(
     Vector3 fishPosition,
@@ -132,7 +238,7 @@ public sealed class FishEscapeAI : MonoBehaviour
 
         float lateralSteering =
             Mathf.Clamp(
-                ComputeWanderSteering() +
+                currentLateralEscapeStrength +
                 ComputeSideWallSteering(frame),
                 -1f,
                 1f);
@@ -142,7 +248,7 @@ public sealed class FishEscapeAI : MonoBehaviour
             frame.lateralAxis *
             lateralSteering;
 
-        // EmpÍche le poisson de rester bloquÈ contre le bord opposÈ.
+        // Emp√™che le poisson de rester bloqu√© contre le bord oppos√©.
         direction +=
             ComputeBoundarySteering(
                 fishPosition);
@@ -162,9 +268,9 @@ public sealed class FishEscapeAI : MonoBehaviour
     }
 
     /// <summary>
-    /// RepËre de nage : la berge est le cÙtÈ de la zone d'eau le plus proche du pÍcheur.
-    /// "Loin de la berge" est donc l'axe opposÈ, et "latÈral" l'axe perpendiculaire.
-    /// Sans zone d'eau connue, on retombe sur "s'Èloigner du pÍcheur" sans Èvitement de bords.
+    /// Rep√®re de nage : la berge est le c√¥t√© de la zone d'eau le plus proche du p√™cheur.
+    /// "Loin de la berge" est donc l'axe oppos√©, et "lat√©ral" l'axe perpendiculaire.
+    /// Sans zone d'eau connue, on retombe sur "s'√©loigner du p√™cheur" sans √©vitement de bords.
     /// </summary>
     private WaterFrame BuildWaterFrame(
     Vector3 fishPosition,
@@ -229,7 +335,7 @@ public sealed class FishEscapeAI : MonoBehaviour
             smallestDistance,
             distanceLeft))
         {
-            // Berge ‡ gauche -> fuite vers la droite.
+            // Berge √† gauche -> fuite vers la droite.
             frame.awayFromBank = Vector3.right;
             frame.lateralAxis = Vector3.forward;
             frame.lateralOffset =
@@ -242,7 +348,7 @@ public sealed class FishEscapeAI : MonoBehaviour
             smallestDistance,
             distanceRight))
         {
-            // Berge ‡ droite -> fuite vers la gauche.
+            // Berge √† droite -> fuite vers la gauche.
             frame.awayFromBank = Vector3.left;
             frame.lateralAxis = Vector3.forward;
             frame.lateralOffset =
@@ -255,7 +361,7 @@ public sealed class FishEscapeAI : MonoBehaviour
             smallestDistance,
             distanceBack))
         {
-            // Berge derriËre -> fuite vers l'avant.
+            // Berge derri√®re -> fuite vers l'avant.
             frame.awayFromBank = Vector3.forward;
             frame.lateralAxis = Vector3.right;
             frame.lateralOffset =
@@ -266,7 +372,7 @@ public sealed class FishEscapeAI : MonoBehaviour
         }
         else
         {
-            // Berge devant -> fuite vers l'arriËre.
+            // Berge devant -> fuite vers l'arri√®re.
             frame.awayFromBank = Vector3.back;
             frame.lateralAxis = Vector3.right;
             frame.lateralOffset =
@@ -344,17 +450,46 @@ public sealed class FishEscapeAI : MonoBehaviour
     }
 
     /// <summary>
-    /// DÈrive latÈrale lente, entre -wanderStrength et +wanderStrength (bruit de Perlin : pas de cycle rÈpÈtitif).
+    /// Choisit une direction lat√©rale nette et la conserve bri√®vement.
     /// </summary>
-    private float ComputeWanderSteering()
+    private void ChooseNextEscapeDecision()
     {
-        float noise = Mathf.PerlinNoise(Time.time * wanderFrequency, noiseOffset) * 2f - 1f;
-        return noise * wanderStrength;
+        float minimumDuration = Mathf.Min(
+            minimumDecisionDuration,
+            maximumDecisionDuration);
+
+        float maximumDuration = Mathf.Max(
+            minimumDecisionDuration,
+            maximumDecisionDuration);
+
+        timeUntilNextEscapeDecision = Random.Range(
+            minimumDuration,
+            maximumDuration);
+
+        float minimumStrength = Mathf.Min(
+            minimumLateralEscapeStrength,
+            maximumLateralEscapeStrength);
+
+        float maximumStrength = Mathf.Max(
+            minimumLateralEscapeStrength,
+            maximumLateralEscapeStrength);
+
+        float strength = Random.Range(
+            minimumStrength,
+            maximumStrength);
+
+        float side = Random.value < 0.5f
+            ? -1f
+            : 1f;
+
+        currentLateralEscapeStrength =
+            side * strength;
     }
 
+
     /// <summary>
-    /// PoussÈe vers le centre qui croÓt en douceur dans les derniers sideAvoidZone du bord.
-    /// PlafonnÈe ‡ sideAvoidStrength : le poisson peut encore frÙler le bord.
+    /// Pouss√©e vers le centre qui cro√Æt en douceur dans les derniers sideAvoidZone du bord.
+    /// Plafonn√©e √† sideAvoidStrength : le poisson peut encore fr√¥ler le bord.
     /// </summary>
     private float ComputeSideWallSteering(WaterFrame frame)
     {

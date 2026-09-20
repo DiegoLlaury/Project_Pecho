@@ -1,17 +1,17 @@
 using UnityEngine;
 
+[CreateAssetMenu(fileName = "DamageEffect", menuName = "Scriptable Objects/Spells/Effects/Damage")]
 public class DamageEffect : SpellEffect
 {
     public int damage;
-    public override void Execute(
-        GameObject caster,
-        GameObject target
-    )
+
+    /// <summary>Applique des dégâts à toute cible compatible.</summary>
+    public override void Execute(GameObject caster, GameObject target)
     {
-        IDamage damageable = target.GetComponent<IDamage>();
+        IDamage damageable = target.GetComponentInParent<IDamage>();
         if (damageable != null)
         {
-            damageable.GiveDamage(damage, target);
-        }   
+            damageable.GiveDamage(damage, caster);
+        }
     }
 }

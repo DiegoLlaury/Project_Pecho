@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 59ae1941b7ba0e4469419ff3aa562cc3, type: 3}
+  m_Name: Fireball
+  m_EditorClassIdentifier: Assembly-CSharp::SpellType
+  spellName: Boule de feu
+  icon: {fileID: 21300000, guid: c9091cc11ca0b8348a214445d13a26d7, type: 3}
+  cooldown: 5
+  minimumWarningDuration: 1.4
+  maximumWarningDuration: 2.6
+  manaCost: 35
+  enduranceCost: 20
+  impactRadius: 3.5
+  impactVisualDuration: 0.45
+  effects:
+  - {fileID: 11400000, guid: 5a3fd8512c3c3a84793dbea139d85101, type: 2}
+  - {fileID: 11400000, guid: 85cd631560a295c4d85046ac9e709dd2, type: 2}
+  telegraphPrefab: {fileID: 3781190759905221837, guid: 544cb23a5531a824195919b35687363e, type: 3}
+  projectilePrefab: {fileID: 5655298889227753755, guid: 806910149fda92f418b6bd2e5db91299, type: 3}
+  impactPrefab: {fileID: 6357624051304367730, guid: 56e8195d3c8cec44ca8d77b547e057f0, type: 3}
