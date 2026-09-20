@@ -12,7 +12,7 @@ GameObject:
   - component: {fileID: 4321358288067726026}
   - component: {fileID: 4174147558781449270}
   m_Layer: 0
-  m_Name: vfx_Tornado_01
+  m_Name: WindTornado
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
