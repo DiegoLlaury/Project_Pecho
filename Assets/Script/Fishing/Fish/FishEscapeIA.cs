@@ -127,6 +127,24 @@ public sealed class FishEscapeAI : MonoBehaviour
         return true;
     }
 
+    /// <summary>
+    /// Interrompt la ruée active et réinitialise son délai de récupération.
+    /// </summary>
+    public bool TryInterruptBurst()
+    {
+        if (!IsBursting)
+        {
+            return false;
+        }
+
+        burstTimeRemaining = 0f;
+        timeUntilNextBurst = RollBurstInterval();
+        hasPendingShoreBurstCost = false;
+        IsShoreBurst = false;
+        return true;
+    }
+
+
     private bool IsNearShore(Vector3 fishPosition)
     {
         Bounds bounds = waterBounds.bounds;

@@ -18,7 +18,7 @@ MonoBehaviour:
   minimumWarningDuration: 1.5
   maximumWarningDuration: 2.1
   manaCost: 30
-  enduranceCost: 32
+  enduranceCost: 15
   impactRadius: 1.8
   impactVisualDuration: 0.35
   effects:

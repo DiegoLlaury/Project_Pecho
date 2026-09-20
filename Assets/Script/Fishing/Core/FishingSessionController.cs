@@ -109,6 +109,7 @@ public class FishingSessionController : MonoBehaviour
         Mathf.Clamp01(breakTimer / breakDuration);
 
     public event Action<FishingState> StateChanged;
+    public event Action BurstInterrupted;
 
     private void Start()
     {
@@ -278,13 +279,24 @@ public class FishingSessionController : MonoBehaviour
         normalizedTension = Mathf.Clamp01(normalizedTension + Mathf.Max(0f, normalizedAmount));
     }
 
-    /// <summary>Retire directement de l'endurance au poisson, notamment pour les futurs sorts du joueur.</summary>
+    /// <summary>Retire de l'endurance au poisson et interrompt sa ruée si elle est active.</summary>
     public void ApplyFishEnduranceDamage(float amount)
     {
+        float clampedAmount = Mathf.Max(0f, amount);
+        if (clampedAmount <= 0f || State != FishingState.Active)
+        {
+            return;
+        }
+
         currentEndurance = Mathf.Clamp(
-            currentEndurance - Mathf.Max(0f, amount),
+            currentEndurance - clampedAmount,
             0f,
             fishDefinition != null ? fishDefinition.maxEndurance : 0f);
+
+        if (fishEscapeAI != null && fishEscapeAI.TryInterruptBurst())
+        {
+            BurstInterrupted?.Invoke();
+        }
     }
 
     /// <summary>Débite l'endurance du poisson si son solde couvre le coût demandé.</summary>
