@@ -565,6 +565,18 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 220171934615494636, guid: 462147db93c4223489bc784476d8d722, type: 3}
+      propertyPath: m_SizeDelta.x
+      value: 300
+      objectReference: {fileID: 0}
+    - target: {fileID: 220171934615494636, guid: 462147db93c4223489bc784476d8d722, type: 3}
+      propertyPath: m_SizeDelta.y
+      value: 300
+      objectReference: {fileID: 0}
+    - target: {fileID: 220171934615494636, guid: 462147db93c4223489bc784476d8d722, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 160
+      objectReference: {fileID: 0}
     - target: {fileID: 388153436224429259, guid: 462147db93c4223489bc784476d8d722, type: 3}
       propertyPath: m_fontSize
       value: 33.7
@@ -668,6 +680,18 @@ PrefabInstance:
     - target: {fileID: 7230005634716964258, guid: 462147db93c4223489bc784476d8d722, type: 3}
       propertyPath: m_hasFontAssetChanged
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7532382892589157563, guid: 462147db93c4223489bc784476d8d722, type: 3}
+      propertyPath: m_SizeDelta.x
+      value: 300
+      objectReference: {fileID: 0}
+    - target: {fileID: 7532382892589157563, guid: 462147db93c4223489bc784476d8d722, type: 3}
+      propertyPath: m_SizeDelta.y
+      value: 300
+      objectReference: {fileID: 0}
+    - target: {fileID: 7532382892589157563, guid: 462147db93c4223489bc784476d8d722, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 160
       objectReference: {fileID: 0}
     - target: {fileID: 8357148103938567105, guid: 462147db93c4223489bc784476d8d722, type: 3}
       propertyPath: m_Name
@@ -834,7 +858,7 @@ MonoBehaviour:
     - "Je sait ne t'inqui\xE8te pas, Maman est partie chercher le lait magique pour
       le soigner."
     SpriteNeutral: {fileID: 317246576, guid: 82300706a1654734a8f39256feb2f5ad, type: 3}
-    SpriteSpeaking: {fileID: 317246576, guid: 82300706a1654734a8f39256feb2f5ad, type: 3}
+    SpriteSpeaking: {fileID: 1377131117, guid: 41acb844d2d4a7240a5e4d7ac2947518, type: 3}
   dialogueTimeline:
   - CharID: 0
     DialogueID: 0
