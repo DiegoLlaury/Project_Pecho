@@ -5,6 +5,7 @@ public sealed class FishSpellcastingAI : MonoBehaviour
     private const float MinimumDecisionDelay = 0.1f;
     private const float GroundProbeHeight = 20f;
     private const float GroundProbeDistance = 50f;
+    private const int GroundHitBufferCapacity = 16;
 
     [SerializeField] private SpellCaster spellCaster;
     [SerializeField] private Transform target;
@@ -15,16 +16,24 @@ public sealed class FishSpellcastingAI : MonoBehaviour
     [SerializeField] private LayerMask groundLayers = -1;
 
     private float timeUntilCastDecision;
-    private FishingSessionController fishingSessionController;
+    private ISpendableEndurance enduranceResource;
+    private readonly RaycastHit[] groundHitBuffer = new RaycastHit[GroundHitBufferCapacity];
 
-    /// <summary>Initialise la cible, la session et redémarre la temporisation de décision.</summary>
+    /// <summary>Initialise la cible, la ressource d'endurance et redémarre la temporisation de décision.</summary>
     public void Configure(
         Transform configuredTarget,
-        FishingSessionController configuredFishingSessionController)
+        ISpendableEndurance configuredEnduranceResource)
     {
         target = configuredTarget;
-        fishingSessionController = configuredFishingSessionController;
+        enduranceResource = configuredEnduranceResource;
+        spellCaster?.ResetCombatState();
         timeUntilCastDecision = RollDecisionDelay();
+    }
+
+    /// <summary>Annule le lancement de sort en cours lorsque la session se termine.</summary>
+    public void CancelCasting()
+    {
+        spellCaster?.CancelCasting();
     }
 
     /// <summary>Adapte les décisions de sort à l'endurance actuelle du poisson.</summary>
@@ -32,7 +41,7 @@ public sealed class FishSpellcastingAI : MonoBehaviour
     {
         if (spellCaster == null ||
             target == null ||
-            fishingSessionController == null ||
+            enduranceResource == null ||
             availableSpells == null ||
             availableSpells.Length == 0)
         {
@@ -51,15 +60,17 @@ public sealed class FishSpellcastingAI : MonoBehaviour
             return;
         }
 
-        SpellType selectedSpell = FindReadySpell(
-            fishingSessionController.CurrentEndurance);
-        if (selectedSpell != null &&
-            spellCaster.TryCast(
-                selectedSpell,
-                ResolveGroundTarget(target.position)))
+        SpellType selectedSpell = FindReadySpell(enduranceResource.CurrentEndurance);
+        if (selectedSpell != null && enduranceResource.TrySpendEndurance(selectedSpell.enduranceCost))
         {
-            fishingSessionController.TrySpendFishEndurance(
-                selectedSpell.enduranceCost);
+            bool castStarted = spellCaster.TryCast(
+                selectedSpell,
+                ResolveGroundTarget(target.position));
+
+            if (!castStarted)
+            {
+                enduranceResource.RestoreEndurance(selectedSpell.enduranceCost);
+            }
         }
 
         timeUntilCastDecision = RollDecisionDelay();
@@ -85,18 +96,22 @@ public sealed class FishSpellcastingAI : MonoBehaviour
     private Vector3 ResolveGroundTarget(Vector3 targetPosition)
     {
         Vector3 rayOrigin = targetPosition + Vector3.up * GroundProbeHeight;
-        RaycastHit[] hits = Physics.RaycastAll(
+        int hitCount = Physics.RaycastNonAlloc(
             rayOrigin,
             Vector3.down,
+            groundHitBuffer,
             GroundProbeDistance,
             groundLayers,
             QueryTriggerInteraction.Ignore);
         float nearestDistance = float.MaxValue;
         Vector3 groundPosition = targetPosition;
 
-        foreach (RaycastHit hit in hits)
+        for (int hitIndex = 0; hitIndex < hitCount; hitIndex++)
         {
-            if (hit.collider.transform.root == target.root || hit.distance >= nearestDistance)
+            RaycastHit hit = groundHitBuffer[hitIndex];
+            if (hit.collider == null ||
+                hit.collider.transform.root == target.root ||
+                hit.distance >= nearestDistance)
             {
                 continue;
             }

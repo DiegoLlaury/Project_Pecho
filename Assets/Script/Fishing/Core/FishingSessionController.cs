@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-public class FishingSessionController : MonoBehaviour
+public class FishingSessionController : MonoBehaviour, ISpendableEndurance
 {
     private const float Epsilon = 0.001f;
     private const float MinimumStruggleDrainRatio = 0.35f;
@@ -20,6 +20,7 @@ public class FishingSessionController : MonoBehaviour
     [SerializeField] private BoxCollider waterBounds;
     [SerializeField] private BoxCollider catchZone;
     [SerializeField] private FishingLinePresenter fishingLinePresenter;
+    [SerializeField] private ATBTimingController atbTimingController;
 
     [Header("Player")]
     [Tooltip("Accélération maximale de traction du joueur.")]
@@ -87,11 +88,17 @@ public class FishingSessionController : MonoBehaviour
 
     private float currentEndurance;
     private float normalizedTension;
+    private float whirlwindTimeRemaining;
+    private float whirlwindPullAcceleration;
+
     private float breakTimer;
     private float referenceLineDistance;
 
     private bool isConfigured;
     private bool hasLoggedConfigurationWarning;
+    private readonly ATBContinuousBoostTracker pullBoostTracker = new ATBContinuousBoostTracker();
+    private readonly ATBContinuousBoostTracker releaseBoostTracker = new ATBContinuousBoostTracker();
+    private readonly ATBContinuousBoostTracker lateralBoostTracker = new ATBContinuousBoostTracker();
 
     public FishingState State { get; private set; } = FishingState.Active;
 
@@ -110,6 +117,14 @@ public class FishingSessionController : MonoBehaviour
 
     public event Action<FishingState> StateChanged;
     public event Action BurstInterrupted;
+
+    private void Awake()
+    {
+        if (atbTimingController == null)
+        {
+            atbTimingController = FindFirstObjectByType<ATBTimingController>();
+        }
+    }
 
     private void Start()
     {
@@ -132,6 +147,16 @@ public class FishingSessionController : MonoBehaviour
             -1f,
             1f);
 
+        float pullActionMultiplier = pullBoostTracker.Evaluate(
+            pull > Epsilon,
+            atbTimingController);
+        float releaseActionMultiplier = releaseBoostTracker.Evaluate(
+            release > Epsilon,
+            atbTimingController);
+        float lateralActionMultiplier = lateralBoostTracker.Evaluate(
+            Mathf.Abs(lateral) > Epsilon,
+            atbTimingController);
+
         fishEscapeAI.Tick(
             deltaTime,
             NormalizedEndurance);
@@ -141,7 +166,7 @@ public class FishingSessionController : MonoBehaviour
 
         Vector3 fishPosition = fishMovementController.Position;
 
-        fishEscapeAI.TryTriggerShoreBurst(fishPosition,NormalizedEndurance);
+        fishEscapeAI.TryTriggerShoreBurst(fishPosition, NormalizedEndurance);
 
         if (fishEscapeAI.ConsumeShoreBurstCost())
         {
@@ -176,6 +201,7 @@ public class FishingSessionController : MonoBehaviour
 
         float effectiveReelForce =
             reelForce *
+            pullActionMultiplier *
             (1f - Mathf.Clamp01(fishDefinition.resistanceToPull));
 
         float fishResistanceForce =
@@ -189,6 +215,7 @@ public class FishingSessionController : MonoBehaviour
         ApplyForces(
             pull,
             lateral,
+            lateralActionMultiplier,
             directionToPlayer,
             escapeDirection,
             effectiveReelForce,
@@ -197,6 +224,7 @@ public class FishingSessionController : MonoBehaviour
 
         UpdateEndurance(
             pull,
+            pullActionMultiplier,
             fishResistanceForce,
             effectiveReelForce,
             deltaTime);
@@ -205,6 +233,7 @@ public class FishingSessionController : MonoBehaviour
             pull,
             release,
             lateral,
+            releaseActionMultiplier,
             fishResistanceForce,
             effectiveReelForce,
             fishPosition,
@@ -244,8 +273,12 @@ public class FishingSessionController : MonoBehaviour
         currentEndurance = fishDefinition.maxEndurance;
         normalizedTension = 0f;
         breakTimer = 0f;
+        pullBoostTracker.Reset();
+        releaseBoostTracker.Reset();
+        lateralBoostTracker.Reset();
 
         fishMovementController.Stop();
+        fishMovementController.GetComponent<FishIdentificationState>()?.ResetIdentification();
 
         fishMovementController.Configure(
             fishDefinition,
@@ -266,6 +299,12 @@ public class FishingSessionController : MonoBehaviour
         fishingLinePresenter.SetLineTension(0f);
 
         SetState(FishingState.Active);
+    }
+
+    /// <summary>Termine la session lorsque le joueur n'a plus d'endurance de combat.</summary>
+    public void EndFromPlayerExhaustion()
+    {
+        EndSession(FishingState.Escaped);
     }
 
     /// <summary>Ajoute immédiatement une surtension normalisée à la ligne.</summary>
@@ -299,17 +338,39 @@ public class FishingSessionController : MonoBehaviour
         }
     }
 
-    /// <summary>Débite l'endurance du poisson si son solde couvre le coût demandé.</summary>
+    /// <summary>Débite l'endurance du poisson si la session est active et si le solde couvre le coût.</summary>
     public bool TrySpendFishEndurance(float amount)
     {
         float clampedAmount = Mathf.Max(0f, amount);
-        if (clampedAmount > currentEndurance)
+        if (State != FishingState.Active || clampedAmount > currentEndurance)
         {
             return false;
         }
 
         currentEndurance -= clampedAmount;
         return true;
+    }
+
+    /// <summary>Débite l'endurance via le contrat de ressource utilisé par l'IA.</summary>
+    public bool TrySpendEndurance(float amount)
+    {
+        return TrySpendFishEndurance(amount);
+    }
+
+    /// <summary>Restaure l'endurance du poisson sans dépasser sa capacité maximale.</summary>
+    public void RestoreEndurance(float amount)
+    {
+        float maximumEndurance = fishDefinition != null ? fishDefinition.maxEndurance : 0f;
+        currentEndurance = Mathf.Min(
+            maximumEndurance,
+            currentEndurance + Mathf.Max(0f, amount));
+    }
+
+    /// <summary>Applique une attraction temporaire du poisson vers le joueur.</summary>
+    public void ApplyWhirlwind(float duration, float pullAcceleration)
+    {
+        whirlwindTimeRemaining = Mathf.Max(whirlwindTimeRemaining, Mathf.Max(0f, duration));
+        whirlwindPullAcceleration = Mathf.Max(0f, pullAcceleration);
     }
 
 
@@ -410,6 +471,7 @@ public class FishingSessionController : MonoBehaviour
     private void ApplyForces(
     float pull,
     float lateral,
+    float lateralActionMultiplier,
     Vector3 directionToPlayer,
     Vector3 escapeDirection,
     float effectiveReelForce,
@@ -455,6 +517,7 @@ public class FishingSessionController : MonoBehaviour
         float playerLateralAcceleration =
             lateral *
             lateralForce *
+            lateralActionMultiplier *
             (1f - fishDefinition.lateralResistance);
 
         Vector3 playerLateralForce =
@@ -466,6 +529,12 @@ public class FishingSessionController : MonoBehaviour
             fishEscapeForce +
             playerLateralForce;
 
+        if (whirlwindTimeRemaining > 0f)
+        {
+            totalAcceleration += directionToPlayer * whirlwindPullAcceleration;
+            whirlwindTimeRemaining = Mathf.Max(0f, whirlwindTimeRemaining - Time.fixedDeltaTime);
+        }
+
         fishMovementController.SetAcceleration(
             totalAcceleration);
     }
@@ -473,6 +542,7 @@ public class FishingSessionController : MonoBehaviour
 
     private void UpdateEndurance(
     float pull,
+    float pullActionMultiplier,
     float fishResistanceForce,
     float effectiveReelForce,
     float deltaTime)
@@ -499,6 +569,7 @@ public class FishingSessionController : MonoBehaviour
                 burstDrainMultiplier *
                 enduranceDrainPerSecond *
                 fishDefinition.enduranceDrainMultiplier *
+                pullActionMultiplier *
                 deltaTime;
         }
         else
@@ -519,6 +590,7 @@ public class FishingSessionController : MonoBehaviour
         float pull,
         float release,
         float lateral,
+        float releaseActionMultiplier,
         float fishResistanceForce,
         float effectiveReelForce,
         Vector3 fishPosition,
@@ -578,7 +650,8 @@ public class FishingSessionController : MonoBehaviour
 
         float recovery =
             release *
-            releaseTensionRecovery +
+            releaseTensionRecovery *
+            releaseActionMultiplier +
             slackDistance *
             distanceSlackRecoveryRate;
 
@@ -683,6 +756,7 @@ public class FishingSessionController : MonoBehaviour
         }
 
         fishMovementController.Stop();
+        fishSpellcastingAI.CancelCasting();
 
         SetState(finalState);
 
