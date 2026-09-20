@@ -1,0 +1,16 @@
+fileFormatVersion: 2
+guid: ce47b9045a7a3214ca1379e605f54d9f
+ShaderImporter:
+  externalObjects: {}
+  defaultTextures: []
+  nonModifiableTextures: []
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 345212
+  packageName: Free Game VFX Collection(URP)
+  packageVersion: 1.03
+  assetPath: Assets/Eric VFX Studio/Resource/Shader/AdditiveFlow.shader
+  uploadId: 992578

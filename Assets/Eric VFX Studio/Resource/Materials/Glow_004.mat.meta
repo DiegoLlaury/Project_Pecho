@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: 645618f1f8117b4438515ce6f935ca19
+timeCreated: 1522138247
+licenseType: Store
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: fx_textures_flare_materials.unity3d
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 345212
+  packageName: Free Game VFX Collection(URP)
+  packageVersion: 1.03
+  assetPath: Assets/Eric VFX Studio/Resource/Materials/Glow_004.mat
+  uploadId: 992578

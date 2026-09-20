@@ -1,0 +1,16 @@
+fileFormatVersion: 2
+guid: 00f3c70d32d97ee47ac72d2ffef81b21
+ShaderImporter:
+  externalObjects: {}
+  defaultTextures: []
+  nonModifiableTextures: []
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 345212
+  packageName: Free Game VFX Collection(URP)
+  packageVersion: 1.03
+  assetPath: Assets/Eric VFX Studio/Resource/Shader/AlphaBlendFlow.shader
+  uploadId: 992578

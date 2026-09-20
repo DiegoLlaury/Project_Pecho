@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: d90b75babcb739a48926ea25834806a4
+timeCreated: 1435048583
+licenseType: Store
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 0
+  userData: 
+  assetBundleName: fx_textures_line_materials.unity3d
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 345212
+  packageName: Free Game VFX Collection(URP)
+  packageVersion: 1.03
+  assetPath: Assets/Eric VFX Studio/Resource/Materials/grad10_08.mat
+  uploadId: 992578

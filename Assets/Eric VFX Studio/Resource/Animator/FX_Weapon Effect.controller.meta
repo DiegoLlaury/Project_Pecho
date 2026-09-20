@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: 7383df45a82a92b4fae189af0807eb92
+timeCreated: 1551344502
+licenseType: Store
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 9100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 345212
+  packageName: Free Game VFX Collection(URP)
+  packageVersion: 1.03
+  assetPath: Assets/Eric VFX Studio/Resource/Animator/FX_Weapon Effect.controller
+  uploadId: 992578
