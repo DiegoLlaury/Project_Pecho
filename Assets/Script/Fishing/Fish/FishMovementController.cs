@@ -5,28 +5,33 @@ public sealed class FishMovementController : MonoBehaviour
 {
     private const float Epsilon = 0.001f;
     private const float BoundsPadding = 0.01f;
+    private const float AngularDamping = 10f;
+    private const float TestMovementSpeed = 50f;
+    private const float MidpointRatio = 0.5f;
 
     [Header("References")]
     [SerializeField] private Rigidbody fishRigidbody;
 
     [Header("Rotation")]
     [SerializeField] private bool rotateTowardsVelocity = true;
-    [Tooltip("Vitesse de rotation maximale en degrÈs par seconde, atteinte ‡ pleine vitesse de virage.")]
+    [Tooltip("Vitesse de rotation maximale en degr√©s par seconde, atteinte √† pleine vitesse de virage.")]
     [SerializeField, Min(0f)] private float maxTurnSpeedDegrees = 180f;
     [Tooltip("Sous cette vitesse (m/s), le poisson garde son cap.")]
     [SerializeField, Min(0f)] private float minimumSpeedToTurn = 0.15f;
-    [Tooltip("Part de maxSpeed ‡ partir de laquelle le poisson tourne ‡ pleine vitesse.")]
+    [Tooltip("Part de maxSpeed √† partir de laquelle le poisson tourne √† pleine vitesse.")]
     [SerializeField, Range(0.1f, 1f)] private float fullTurnSpeedRatio = 0.4f;
 
     private FishDefinition fishDefinition;
     private BoxCollider waterBounds;
+    private Collider[] fishColliders;
     private Vector3 acceleration;
+    private Vector3 pendingVelocityChange;
     private float swimmingHeight;
     private bool isConfigured;
     private bool hasLoggedConfigurationWarning;
 
     /// <summary>
-    /// Position physique du poisson (source de vÈritÈ pour la simulation).
+    /// Position physique du poisson (source de v√©rit√© pour la simulation).
     /// </summary>
     public Vector3 Position =>
         fishRigidbody != null ? fishRigidbody.position : transform.position;
@@ -47,6 +52,12 @@ public sealed class FishMovementController : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Vitesse horizontale pr√©par√©e par le dernier Simulate, avant le solveur de collisions.
+    /// Reste stable pendant les callbacks de ce pas physique, puis est remplac√©e au pas suivant.
+    /// </summary>
+    public Vector3 PreImpactVelocity { get; private set; }
+
     private void Reset()
     {
         fishRigidbody = GetComponent<Rigidbody>();
@@ -61,14 +72,16 @@ public sealed class FishMovementController : MonoBehaviour
     }
 
     /// <summary>
-    /// Configure le poisson avec son profil de comportement et son volume de nage.
+    /// Configure le corps dynamique, annule les commandes pr√©c√©dentes et replace
+    /// le poisson dans le volume de nage en tenant compte de ses colliders physiques.
     /// </summary>
-    public void Configure(
-    FishDefinition definition,
-    BoxCollider configuredWaterBounds)
+    public void Configure(FishDefinition definition, BoxCollider configuredWaterBounds)
     {
         fishDefinition = definition;
         waterBounds = configuredWaterBounds;
+        acceleration = Vector3.zero;
+        pendingVelocityChange = Vector3.zero;
+        PreImpactVelocity = Vector3.zero;
 
         if (fishRigidbody == null)
         {
@@ -79,45 +92,27 @@ public sealed class FishMovementController : MonoBehaviour
 
         if (!isConfigured)
         {
+            Stop();
             return;
         }
 
-        // Le poisson doit Ítre un Rigidbody dynamique.
+        // Garder un corps dynamique : le solveur Unity reste responsable des contacts.
         fishRigidbody.isKinematic = false;
-
-        // Les collisions doivent rester actives.
         fishRigidbody.detectCollisions = true;
-
-        // On autorise X et Z.
-        // On bloque uniquement la hauteur et les rotations
-        // qui pourraient faire basculer le poisson.
         fishRigidbody.constraints =
             RigidbodyConstraints.FreezePositionY |
             RigidbodyConstraints.FreezeRotationX |
             RigidbodyConstraints.FreezeRotationZ;
-
         fishRigidbody.useGravity = false;
-
         fishRigidbody.linearDamping = 0f;
-        fishRigidbody.angularDamping = 10f;
+        fishRigidbody.angularDamping = AngularDamping;
+        fishRigidbody.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+        fishRigidbody.interpolation = RigidbodyInterpolation.Interpolate;
 
-        fishRigidbody.collisionDetectionMode =
-            CollisionDetectionMode.ContinuousDynamic;
-
-        fishRigidbody.interpolation =
-            RigidbodyInterpolation.Interpolate;
-
-        // --------------------------------------------------
-        // …TAT DE SIMULATION
-        // --------------------------------------------------
-
+        fishColliders = fishRigidbody.GetComponentsInChildren<Collider>(true);
         swimmingHeight = fishRigidbody.position.y;
-
-        acceleration = Vector3.zero;
-
-        fishRigidbody.linearVelocity = Vector3.zero;
-        fishRigidbody.angularVelocity = Vector3.zero;
-
+        Stop();
+        ConstrainToWaterBounds(true);
         fishRigidbody.WakeUp();
 
         Debug.Log(
@@ -129,7 +124,7 @@ public sealed class FishMovementController : MonoBehaviour
     }
 
     /// <summary>
-    /// DÈfinit l'accÈlÈration horizontale totale (force du poisson + traction du joueur).
+    /// D√©finit l'acc√©l√©ration horizontale totale (force du poisson + traction du joueur).
     /// </summary>
     public void SetAcceleration(Vector3 newAcceleration)
     {
@@ -137,33 +132,49 @@ public sealed class FishMovementController : MonoBehaviour
     }
 
     /// <summary>
-    /// ArrÍte immÈdiatement le poisson et annule toute accÈlÈration.
+    /// Cumule une variation de vitesse horizontale en m/s, ind√©pendante de la masse.
+    /// Elle est consomm√©e une seule fois au prochain Simulate valide, avant le plafond de vitesse.
+    /// </summary>
+    public void QueueVelocityChange(Vector3 velocityChange)
+    {
+        pendingVelocityChange += Vector3.ProjectOnPlane(velocityChange, Vector3.up);
+    }
+
+    /// <summary>
+    /// Pr√©pare un pas depuis la vitesse issue du solveur pr√©c√©dent. La session doit appeler
+    /// cette m√©thode une seule fois par pas, apr√®s SetAcceleration et avant le solveur Unity.
+    /// Cette m√©thode n'avance pas elle-m√™me Physics.
+    /// </summary>
+    public void Simulate(float dt)
+    {
+        if (!isConfigured || !isActiveAndEnabled || dt <= 0f ||
+            float.IsNaN(dt) || float.IsInfinity(dt))
+        {
+            return;
+        }
+
+        Integrate(dt);
+        ConstrainToWaterBounds();
+        RotateTowardsMovement(dt);
+        PreImpactVelocity = CurrentVelocity;
+    }
+
+    /// <summary>
+    /// Arr√™te imm√©diatement le poisson et annule acc√©l√©ration, impulsions et instantan√© de collision.
     /// </summary>
     public void Stop()
     {
         acceleration = Vector3.zero;
+        pendingVelocityChange = Vector3.zero;
+        PreImpactVelocity = Vector3.zero;
 
-        if (fishRigidbody == null)
+        if (fishRigidbody == null || fishRigidbody.isKinematic)
         {
             return;
         }
 
         fishRigidbody.linearVelocity = Vector3.zero;
         fishRigidbody.angularVelocity = Vector3.zero;
-    }
-
-    private void FixedUpdate()
-    {
-        if (!isConfigured)
-        {
-            return;
-        }
-
-        float deltaTime = Time.fixedDeltaTime;
-
-        Integrate(deltaTime);
-        ConstrainToWaterBounds();
-        RotateTowardsMovement(deltaTime);
     }
 
     private bool ValidateConfiguration()
@@ -187,35 +198,47 @@ public sealed class FishMovementController : MonoBehaviour
     }
 
     /// <summary>
-    /// IntËgre l'accÈlÈration : v += a*dt, puis frottement linÈaire, puis plafond maxSpeed.
-    /// La vitesse d'Èquilibre vaut donc (force nette / drag) : la force nette compte vraiment.
+    /// Int√®gre l'acc√©l√©ration et le frottement, puis consomme les impulsions avant le plafond maxSpeed.
     /// </summary>
     private void Integrate(float deltaTime)
     {
+        // Conserver la r√©ponse du solveur : ne jamais r√©injecter une vitesse m√©moris√©e.
         Vector3 velocity = fishRigidbody.linearVelocity;
         velocity.y = 0f;
 
         velocity += acceleration * deltaTime;
-        velocity /= 1f + fishDefinition.drag * deltaTime;
-        velocity = Vector3.ClampMagnitude(velocity, fishDefinition.maxSpeed);
+        velocity /= 1f + Mathf.Max(0f, fishDefinition.drag) * deltaTime;
+
+        // Une impulsion n'est ni multipli√©e par dt ni amortie d√®s sa premi√®re application.
+        velocity += pendingVelocityChange;
+        pendingVelocityChange = Vector3.zero;
+        velocity = Vector3.ClampMagnitude(velocity, Mathf.Max(0f, fishDefinition.maxSpeed));
 
         fishRigidbody.linearVelocity = velocity;
     }
 
-    private void ConstrainToWaterBounds()
+    private void ConstrainToWaterBounds(bool initializeSwimmingHeight = false)
     {
         Bounds bounds = waterBounds.bounds;
         Vector3 position = fishRigidbody.position;
+        Bounds colliderOffsets = GetColliderOffsets();
 
-        float x = Mathf.Clamp(
+        float x = ClampToFittingInterval(
             position.x,
-            bounds.min.x + BoundsPadding,
-            bounds.max.x - BoundsPadding);
-
-        float z = Mathf.Clamp(
+            bounds.min.x + BoundsPadding - colliderOffsets.min.x,
+            bounds.max.x - BoundsPadding - colliderOffsets.max.x);
+        float z = ClampToFittingInterval(
             position.z,
-            bounds.min.z + BoundsPadding,
-            bounds.max.z - BoundsPadding);
+            bounds.min.z + BoundsPadding - colliderOffsets.min.z,
+            bounds.max.z - BoundsPadding - colliderOffsets.max.z);
+
+        if (initializeSwimmingHeight)
+        {
+            swimmingHeight = ClampToFittingInterval(
+                position.y,
+                bounds.min.y + BoundsPadding - colliderOffsets.min.y,
+                bounds.max.y - BoundsPadding - colliderOffsets.max.y);
+        }
 
         bool clampedX = !Mathf.Approximately(position.x, x);
         bool clampedZ = !Mathf.Approximately(position.z, z);
@@ -227,26 +250,71 @@ public sealed class FishMovementController : MonoBehaviour
         }
 
         fishRigidbody.position = new Vector3(x, swimmingHeight, z);
-
         Vector3 velocity = fishRigidbody.linearVelocity;
 
-        if (clampedX)
+        // Retirer uniquement la vitesse sortante, pas un rebond entrant produit par le solveur.
+        if (clampedX && (position.x - x) * velocity.x > 0f)
         {
             velocity.x = 0f;
         }
 
-        if (clampedZ)
+        if (clampedZ && (position.z - z) * velocity.z > 0f)
         {
             velocity.z = 0f;
         }
 
+        velocity.y = 0f;
         fishRigidbody.linearVelocity = velocity;
     }
 
+    private Bounds GetColliderOffsets()
+    {
+        Bounds colliderOffsets = new Bounds(Vector3.zero, Vector3.zero);
+        bool hasPhysicalCollider = false;
+
+        // Collider.bounds suit le Transform rendu : soustraire ce m√™me rep√®re pour
+        // ne pas transformer le retard de l'interpolation en faux d√©calage du collider.
+        Vector3 bodyTransformPosition = fishRigidbody.transform.position;
+
+        foreach (Collider fishCollider in fishColliders)
+        {
+            if (fishCollider == null || !fishCollider.enabled ||
+                !fishCollider.gameObject.activeInHierarchy || fishCollider.isTrigger ||
+                fishCollider.attachedRigidbody != fishRigidbody)
+            {
+                continue;
+            }
+
+            Bounds colliderBounds = fishCollider.bounds;
+            colliderBounds.center -= bodyTransformPosition;
+
+            if (!hasPhysicalCollider)
+            {
+                colliderOffsets = colliderBounds;
+                hasPhysicalCollider = true;
+            }
+            else
+            {
+                colliderOffsets.Encapsulate(colliderBounds);
+            }
+        }
+
+        return colliderOffsets;
+    }
+
+    private static float ClampToFittingInterval(float value, float minimum, float maximum)
+    {
+        // Un collider plus grand que le volume ne peut pas tenir : le centrer
+        // plut√¥t qu'appeler Mathf.Clamp avec un intervalle invers√©.
+        return minimum <= maximum
+            ? Mathf.Clamp(value, minimum, maximum)
+            : (minimum + maximum) * MidpointRatio;
+    }
+
     /// <summary>
-    /// Oriente le poisson vers sa vitesse avec un taux de rotation plafonnÈ et proportionnel ‡ sa vitesse :
-    /// il dÈcrit un vrai virage au lieu de pivoter sur place, et garde son cap quand il est presque immobile.
-    /// turnResponsiveness rËgle la vivacitÈ de la rotation, maxTurnSpeedDegrees son plafond.
+    /// Oriente le poisson vers sa vitesse avec un taux de rotation plafonn√© et proportionnel √† sa vitesse :
+    /// il d√©crit un vrai virage au lieu de pivoter sur place, et garde son cap quand il est presque immobile.
+    /// turnResponsiveness r√®gle la vivacit√© de la rotation, maxTurnSpeedDegrees son plafond.
     /// </summary>
     private void RotateTowardsMovement(float deltaTime)
     {
@@ -306,7 +374,7 @@ public sealed class FishMovementController : MonoBehaviour
             RigidbodyConstraints.FreezeRotationZ;
 
         fishRigidbody.linearVelocity =
-            Vector3.left * 50f;
+            Vector3.left * TestMovementSpeed;
 
         fishRigidbody.WakeUp();
 

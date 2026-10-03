@@ -18,7 +18,9 @@ MonoBehaviour:
   minimumWarningDuration: 1.4
   maximumWarningDuration: 2.6
   manaCost: 35
-  enduranceCost: 12
+  enduranceCost: 4
+  element: 0
+  elementalBreakPower: 0
   impactRadius: 3.5
   impactVisualDuration: 1.5
   effects:

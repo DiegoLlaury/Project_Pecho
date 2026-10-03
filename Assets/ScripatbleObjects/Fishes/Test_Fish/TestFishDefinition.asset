@@ -12,20 +12,54 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: edfd0afe864087c46a13b7dc27705661, type: 3}
   m_Name: TestFishDefinition
   m_EditorClassIdentifier: Assembly-CSharp::FishDefinition
+  captureEnduranceRatio: 0.1
+  minStruggleDuration: 1.2
+  maxStruggleDuration: 2.2
+  minLateralDodgeDuration: 0.7
+  maxLateralDodgeDuration: 1.1
+  minBurstWindupDuration: 0.4
+  maxBurstWindupDuration: 0.6
+  minBurstDuration: 0.65
+  maxBurstDuration: 0.9
+  minRecoveryDuration: 0.65
+  maxRecoveryDuration: 1
+  fishBreakDuration: 1.2
+  shoreReboundDuration: 0.45
+  tiredEffortMultiplier: 0.4
+  lateralDodgeEffortMultiplier: 1.1
+  burstWindupEffortMultiplier: 0.35
+  castingEffortMultiplier: 0.15
+  recoveryEffortMultiplier: 0.3
+  fishBreakEffortMultiplier: 0.05
+  minReactionDelay: 0.1
+  maxReactionDelay: 0.2
+  sustainedGuidanceDuration: 0.25
+  guidanceInputThreshold: 0.2
+  playerVelocityGuidanceWeight: 0.4
+  struggleSteeringResponse: 4
+  struggleLateralStrength: 0.65
+  dodgeForwardStrength: 0.25
+  minimumDodgeSpace: 1.5
+  burstHeadingCorrectionDegrees: 8
+  burstDecisionWeight: 1
+  dodgeDecisionWeight: 1
+  spellDecisionWeight: 1
+  pullPressureDecisionWeight: 1
+  sustainedGuidanceDecisionWeight: 2
   maxEndurance: 400
-  enduranceDrainMultiplier: 3
-  enduranceRecoveryPerSecond: 1
-  escapeForce: 15
+  enduranceDrainMultiplier: 1
+  enduranceRecoveryPerSecond: 0.5
+  escapeForce: 25
   idleForceMultiplier: 0.45
   exhaustedForceMultiplier: 0.35
   resistanceToPull: 0.3
   lateralResistance: 0.1
-  maxSpeed: 9
+  maxSpeed: 15
   drag: 1.25
-  turnResponsiveness: 28
+  turnResponsiveness: 32
   burstForceMultiplier: 2.7
   burstDuration: 0.85
-  minTimeBetweenBursts: 1.2
-  maxTimeBetweenBursts: 2.6
+  minTimeBetweenBursts: 4
+  maxTimeBetweenBursts: 6
   burstMinEndurance: 0.1
   tensionGainMultiplier: 1.15

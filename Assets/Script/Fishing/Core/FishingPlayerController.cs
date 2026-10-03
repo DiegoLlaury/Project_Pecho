@@ -38,6 +38,43 @@ public sealed class FishingPlayerController : MonoBehaviour
 
     private float verticalVelocity;
     private float horizontalAnimationSpeed;
+    private Vector3 horizontalVelocity;
+
+    /// <summary>
+    /// Vitesse horizontale réellement obtenue par CharacterController.Move,
+    /// après contraintes et collisions, sans composante verticale de saut.
+    /// </summary>
+    public Vector3 HorizontalVelocity =>
+        isActiveAndEnabled && characterController != null && characterController.enabled
+            ? horizontalVelocity
+            : Vector3.zero;
+
+    /// <summary>
+    /// Annule les vitesses de déplacement mémorisées, notamment lors d'un reset de session.
+    /// Ne déplace pas le joueur et ne modifie pas les commandes.
+    /// </summary>
+    public void ResetMovement()
+    {
+        horizontalVelocity = Vector3.zero;
+        horizontalAnimationSpeed = 0f;
+        verticalVelocity = 0f;
+    }
+
+    private void Reset()
+    {
+        characterController = GetComponent<CharacterController>();
+        ResetMovement();
+    }
+
+    private void OnEnable()
+    {
+        ResetMovement();
+    }
+
+    private void OnDisable()
+    {
+        ResetMovement();
+    }
 
     private void Awake()
     {
@@ -61,8 +98,10 @@ public sealed class FishingPlayerController : MonoBehaviour
     {
         Keyboard keyboard = Keyboard.current;
 
-        if (keyboard == null || characterController == null)
+        if (keyboard == null || characterController == null ||
+            !characterController.enabled || Time.deltaTime <= 0f)
         {
+            ResetMovement();
             return;
         }
 
@@ -149,13 +188,19 @@ public sealed class FishingPlayerController : MonoBehaviour
         horizontalDisplacement = PreventLineOverextension(
             horizontalDisplacement);
         horizontalDisplacement = ClampToShore(horizontalDisplacement);
-        horizontalAnimationSpeed = Time.deltaTime > 0f
-            ? horizontalDisplacement.magnitude / Time.deltaTime
-            : 0f;
 
         Vector3 displacement = horizontalDisplacement;
         displacement.y = verticalVelocity * Time.deltaTime;
+        Vector3 positionBeforeMove = characterController.transform.position;
         characterController.Move(displacement);
+
+        Vector3 effectiveDisplacement =
+            characterController.transform.position - positionBeforeMove;
+        effectiveDisplacement.y = 0f;
+        horizontalVelocity = Time.deltaTime > 0f
+            ? effectiveDisplacement / Time.deltaTime
+            : Vector3.zero;
+        horizontalAnimationSpeed = horizontalVelocity.magnitude;
     }
 
     private void UpdateAnimator(bool jumpStarted)

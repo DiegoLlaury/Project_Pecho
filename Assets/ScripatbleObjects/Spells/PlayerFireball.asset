@@ -19,12 +19,14 @@ MonoBehaviour:
   maximumWarningDuration: 0.65
   manaCost: 35
   enduranceCost: 0
+  element: 1
+  elementalBreakPower: 35
   impactRadius: 3.5
   impactVisualDuration: 1.5
   effects:
   - {fileID: 11400000, guid: 5a3fd8512c3c3a84793dbea139d85101, type: 2}
   deliveryMode: 0
   projectileArcHeight: 4
-  telegraphPrefab: {fileID: 3997050252106023209, guid: b6d533c1f1c0b5e449007e5d9ec17f48, type: 3}
+  telegraphPrefab: {fileID: 0}
   projectilePrefab: {fileID: 7545120324866135137, guid: 757250953648813448ef9811dfe40425, type: 3}
   impactPrefab: {fileID: 6547965365630005983, guid: 67874a8650a576649bb16b33c0bbf66f, type: 3}

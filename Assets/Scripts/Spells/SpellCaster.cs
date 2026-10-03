@@ -308,6 +308,12 @@ public sealed class SpellCaster : MonoBehaviour
         GameObject target,
         ATBActionModifiers modifiers)
     {
+        FishingFishSpellHitReceiver fishHitReceiver =
+            target.GetComponentInParent<FishingFishSpellHitReceiver>();
+        fishHitReceiver?.ApplyElementalImpact(
+            spell.element,
+            spell.elementalBreakPower * modifiers.PotencyMultiplier);
+
         if (spell.effects == null)
         {
             return;
